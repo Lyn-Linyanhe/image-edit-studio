@@ -1,0 +1,274 @@
+{
+  "folder": "style-distill\\_probe",
+  "per_image": [
+    {
+      "file": "a_green.jpg",
+      "size": [
+        675,
+        900
+      ],
+      "aspect": 0.75,
+      "paper_white_ratio": 0.5027,
+      "content_ratio": 0.4973,
+      "sat_mean_content": 0.0355,
+      "sat_p90_content": 0.0588,
+      "val_mean_content": 0.7704,
+      "val_std_content": 0.1387,
+      "lum_mean": 0.8701,
+      "lum_p05": 0.5791,
+      "lum_p95": 0.9922,
+      "contrast_range": 0.4131,
+      "lab_a_mean": 0.222,
+      "lab_b_mean": 1.977,
+      "warm_cool_index": 1.977,
+      "ink_line_color": "#6A6A66",
+      "ink_lum": 0.41,
+      "wash_ratio": 0.9996,
+      "edge_density": 3.056,
+      "hue_family": {
+        "red_pink": 0.3342,
+        "orange_brown": 0.1817,
+        "yellow": 0.1386,
+        "green": 0.338,
+        "cyan_teal": 0.0002,
+        "blue": 0.0001,
+        "purple_violet": 0.0003,
+        "magenta_pink": 0.007
+      }
+    },
+    {
+      "file": "b_purple.jpg",
+      "size": [
+        675,
+        900
+      ],
+      "aspect": 0.75,
+      "paper_white_ratio": 0.5197,
+      "content_ratio": 0.4803,
+      "sat_mean_content": 0.1442,
+      "sat_p90_content": 0.2,
+      "val_mean_content": 0.6029,
+      "val_std_content": 0.1573,
+      "lum_mean": 0.7856,
+      "lum_p05": 0.3869,
+      "lum_p95": 0.9961,
+      "contrast_range": 0.6092,
+      "lab_a_mean": 7.972,
+      "lab_b_mean": -9.661,
+      "warm_cool_index": -9.661,
+      "ink_line_color": "#4E455A",
+      "ink_lum": 0.3101,
+      "wash_ratio": 0.275,
+      "edge_density": 2.463,
+      "hue_family": {
+        "red_pink": 0.0119,
+        "orange_brown": 0.0001,
+        "yellow": 0.0,
+        "green": 0.0,
+        "cyan_teal": 0.0,
+        "blue": 0.001,
+        "purple_violet": 0.9751,
+        "magenta_pink": 0.012
+      }
+    },
+    {
+      "file": "style_ref.png",
+      "size": [
+        606,
+        900
+      ],
+      "aspect": 0.6733,
+      "paper_white_ratio": 0.006,
+      "content_ratio": 0.994,
+      "sat_mean_content": 0.0775,
+      "sat_p90_content": 0.1333,
+      "val_mean_content": 0.4956,
+      "val_std_content": 0.1389,
+      "lum_mean": 0.4801,
+      "lum_p05": 0.2915,
+      "lum_p95": 0.7242,
+      "contrast_range": 0.4327,
+      "lab_a_mean": -0.146,
+      "lab_b_mean": 3.666,
+      "warm_cool_index": 3.666,
+      "ink_line_color": "#41403B",
+      "ink_lum": 0.2463,
+      "wash_ratio": 0.8439,
+      "edge_density": 1.98,
+      "hue_family": {
+        "red_pink": 0.0493,
+        "orange_brown": 0.4399,
+        "yellow": 0.3491,
+        "green": 0.1075,
+        "cyan_teal": 0.0099,
+        "blue": 0.0326,
+        "purple_violet": 0.0078,
+        "magenta_pink": 0.004
+      }
+    }
+  ],
+  "aggregate": {
+    "image_count": 3,
+    "aspect_all": [
+      [
+        606,
+        900
+      ],
+      [
+        675,
+        900
+      ]
+    ],
+    "paper_white_ratio_mean": 0.3428,
+    "sat_mean_content_mean": 0.0857,
+    "sat_p90_content_mean": 0.1307,
+    "val_mean_content_mean": 0.623,
+    "val_std_mean": 0.145,
+    "contrast_range_mean": 0.485,
+    "lum_p05_mean": 0.4192,
+    "lum_p95_mean": 0.9042,
+    "lab_b_mean_mean": -1.3393,
+    "wash_ratio_mean": 0.7062,
+    "edge_density_mean": 2.4997,
+    "palette_top10": [
+      {
+        "hex": "#898489",
+        "share": 0.1373,
+        "lum": 0.5235,
+        "role": null
+      },
+      {
+        "hex": "#635E68",
+        "share": 0.135,
+        "lum": 0.3762,
+        "role": null
+      },
+      {
+        "hex": "#77727A",
+        "share": 0.1209,
+        "lum": 0.4531,
+        "role": null
+      },
+      {
+        "hex": "#9F9C95",
+        "share": 0.1161,
+        "lum": 0.6119,
+        "role": null
+      },
+      {
+        "hex": "#F0E9E8",
+        "share": 0.0993,
+        "lum": 0.9203,
+        "role": null
+      },
+      {
+        "hex": "#C5C1BF",
+        "share": 0.0894,
+        "lum": 0.7588,
+        "role": null
+      },
+      {
+        "hex": "#B3AFB0",
+        "share": 0.0855,
+        "lum": 0.69,
+        "role": null
+      },
+      {
+        "hex": "#DBD5D7",
+        "share": 0.082,
+        "lum": 0.8411,
+        "role": null
+      },
+      {
+        "hex": "#514F4F",
+        "share": 0.0728,
+        "lum": 0.3104,
+        "role": null
+      },
+      {
+        "hex": "#A598B1",
+        "share": 0.0617,
+        "lum": 0.6144,
+        "role": null
+      }
+    ],
+    "hue_family_mean": {
+      "purple_violet": 0.3277,
+      "orange_brown": 0.2072,
+      "yellow": 0.1626,
+      "green": 0.1485,
+      "red_pink": 0.1318,
+      "blue": 0.0112,
+      "magenta_pink": 0.0077,
+      "cyan_teal": 0.0034
+    },
+    "per_image_palette": {
+      "a_green.jpg": [
+        {
+          "hex": "#BAB9B4",
+          "share": 0.266
+        },
+        {
+          "hex": "#EEE9E6",
+          "share": 0.264
+        },
+        {
+          "hex": "#D6D1D1",
+          "share": 0.213
+        },
+        {
+          "hex": "#9FA09B",
+          "share": 0.182
+        },
+        {
+          "hex": "#82827E",
+          "share": 0.074
+        }
+      ],
+      "b_purple.jpg": [
+        {
+          "hex": "#857B90",
+          "share": 0.294
+        },
+        {
+          "hex": "#AA9EB5",
+          "share": 0.272
+        },
+        {
+          "hex": "#686074",
+          "share": 0.221
+        },
+        {
+          "hex": "#E0D8E1",
+          "share": 0.123
+        },
+        {
+          "hex": "#584F64",
+          "share": 0.09
+        }
+      ],
+      "style_ref.png": [
+        {
+          "hex": "#83817C",
+          "share": 0.269
+        },
+        {
+          "hex": "#A09B94",
+          "share": 0.243
+        },
+        {
+          "hex": "#696863",
+          "share": 0.23
+        },
+        {
+          "hex": "#52524C",
+          "share": 0.214
+        },
+        {
+          "hex": "#D0C8BF",
+          "share": 0.044
+        }
+      ]
+    }
+  }
+}

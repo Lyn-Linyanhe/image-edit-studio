@@ -1,0 +1,40 @@
+# dsh-image-edit bundle patch: mounts the plugin row into a dsh profile.
+
+# The node half (exports ".") now does two things:
+#   1. registers the lazy-start routes on the injected WebServer
+#      (POST <routePath>/ensure, GET <routePath>/status, POST <routePath>/stop)
+#      so the GUI button can bring the local server up on demand;
+#   2. carries the server coordinates below, which the browser half reads back
+#      from /ensure and /status instead of hard-coding them.
+# The browser half comes from the `dsh.client` declaration in package.json
+# (exports "./client").
+#
+# Install:
+#   dsh plugin --profile web add link:<abs path to this directory>
+# or test without touching the profile:
+#   dsh --profile web --patch ./dev.patch.yml
+#
+# NOTE: the node half loads once at `dsh web` boot, so changing it (or these
+# values) requires restarting `dsh web`. The browser half needs only a reload.
+- insert:
+    - id: image-edit
+      # Node-resolvable package name — must stay in sync with package.json `name`.
+      name: 'dsh-image-edit'
+      config:
+        # Where the local mask-edit server listens, and what the button opens.
+        url: 'http://127.0.0.1:8000'
+        # Label shown in the sidebar footer button.
+        label: '改图'
+        # Path prefix for this plugin's own routes. Deliberately OUTSIDE /api:
+        # the client-connection browser-trust fence owns the /api prefix only.
+        routePath: '/dsh-image-edit'
+        # Port passed to the server when this plugin starts it.
+        port: 8000
+        # Interpreter used to start it.
+        python: 'C:\Python314\python.exe'
+        # The server itself, its working directory, and its log file name.
+        serverScript: 'C:\Users\typ\Desktop\mantu\compose\images\mask_edit_app.py'
+        serverCwd: 'C:\Users\typ\Desktop\mantu\compose\images'
+        logFile: 'server.log'
+        # How long /ensure waits for the freshly spawned server to answer.
+        startTimeoutMs: 25000
