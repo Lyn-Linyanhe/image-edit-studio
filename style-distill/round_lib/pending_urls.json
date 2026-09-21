@@ -1,0 +1,38 @@
+[
+  {
+    "out": "style-distill\\round_manga\\out_4kL_3840x2160.png",
+    "url": "https://api.mikoto.vip/generated/b284ca3f2589a3bb0fe1e27633f7250d.png",
+    "status": "done",
+    "ts": "2026-09-20 19:12:47"
+  },
+  {
+    "out": "style-distill\\round_manga\\out_v14_1k.png",
+    "url": "https://api.mikoto.vip/generated/3c8d022a208f84479720b06cfec192a5.png",
+    "status": "done",
+    "ts": "2026-09-20 19:22:25"
+  },
+  {
+    "out": "style-distill\\round_manga\\out_v15_2kL.png",
+    "url": "https://api.mikoto.vip/generated/7d7cce1cb9b40db5ed9fd2719f3ffd1b.png",
+    "status": "done",
+    "ts": "2026-09-20 19:29:30"
+  },
+  {
+    "out": "style-distill\\round_manga\\out_v16_uncompressed.png",
+    "url": "https://api.mikoto.vip/generated/e1ade8db81a3226c7b8798e9ac435b81.png",
+    "status": "done",
+    "ts": "2026-09-20 19:46:26"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_A1_1k.png",
+    "url": "https://api.mikoto.vip/generated/f194e0c1d0040f58c299d4fa3006236a.png",
+    "status": "done",
+    "ts": "2026-09-20 20:47:35"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_B1_1536x1024.png",
+    "url": "https://api.mikoto.vip/generated/954627dd479ff8d220f402eb5b064efb.png",
+    "status": "done",
+    "ts": "2026-09-21 19:42:18"
+  }
+]

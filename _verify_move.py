@@ -4,7 +4,6 @@
     style-distill   56 文件   19.08 MB
     compose        138 文件   62.99 MB
     dsh-plugins     14 文件    0.04 MB
-    comfyui-img2img  0 文件    0.00 MB
     mantu 原有      78 文件  139.00 MB   (产图 + 图生图用)
     ------------------------------------------------
     合计           286 文件  221.11 MB
@@ -30,7 +29,6 @@ BASELINE = {
     # PID，留着会让 /stop 去杀一个不存在的进程。故内容文件的正确基准是 137。
     "compose": (137, 62.99),
     "dsh-plugins": (14, 0.04),
-    "comfyui-img2img": (0, 0.00),
     "_pre_existing": (78, 139.00),   # 产图 + 图生图用
 }
 

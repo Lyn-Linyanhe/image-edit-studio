@@ -106,7 +106,7 @@ strength / denoise: {强度}
 | 换画风（照片→插画） | 0.45–0.6 | 平衡点，最常用 |
 | 大改风格仍保构图 | 0.6–0.75 | 结构开始漂移，需加 mask 约束 |
 
-> **注意**：gpt-image-1 的 `/images/edits` 接口**没有 strength/denoise 参数**（只有 image、mask、prompt、n、size、quality），风格强度只能靠 prompt 措辞 + mask 范围控制。上表主要给 SD / Flux / ComfyUI 系用。
+> **注意**：gpt-image-1 的 `/images/edits` 接口**没有 strength/denoise 参数**（只有 image、mask、prompt、n、size、quality），风格强度只能靠 prompt 措辞 + mask 范围控制。
 
 ---
 

@@ -54,3 +54,25 @@ __pycache__/
 *.log
 *.bak
 *.pid
+
+# ===== 收敛后追加（2026-09-20）=====
+# 生成结果与中间产物：二进制大文件不进版本库；成品路径见各 round 的 README.md
+style-distill/round_manga/*.png
+style-distill/round_manga/work/
+style-distill/round_manga/checks/
+style-distill/round_manga/input/
+style-distill/round_manga/ref_xiami/
+style-distill/round_snow/*.png
+style-distill/round_snow/work/
+style-distill/round_snow/input/
+
+# 缓存与备份（_backup 里含已删除内容的原件，不进库以保持仓库中无该内容）
+__pycache__/
+*.py[cod]
+*.bak
+style-distill/_backup_comfyui_removal/
+style-distill/_probe/
+style-distill/target/
+style-distill/target_t2/
+style-distill/_b_*.bin
+style-distill/_encprobe.txt

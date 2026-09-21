@@ -225,12 +225,7 @@ quiet gentle introspective wistful literary mood
 - **重跑顺序**：① 先跑 2 张 → ② 若"手绘笔触"不够，把 `STYLE` 段前两句提到最前面并加重 → ③ 若身份漂移
   （发色/配件/构图变了），缩短 `STYLE` 段、把 `PRESERVE` 段移到第一句，并补一句"do not reinterpret"。
 
-**F2 分支 B — SD / ComfyUI（能做结构解耦，是治本方案）**
-- 结构锁：ControlNet `lineart` 或 `softedge`，权重 0.6–0.8，输入 = 目标图
-- 风格锁：IPAdapter（权重 0.6–0.8）或风格 LoRA，输入 = 这 13 张里任选 2–3 张；**纯文本压不住低饱和高调这个特征**
-- denoise：目标图是插画 → 0.35–0.50；是照片/写实 → 0.55–0.75；整张重画 → 0.75–0.85
-- CFG 5–7（**不要调高，会把对比度拉回来并产生脏灰**）；DPM++ 2M 或 Euler a，25–35 步
-- 尺寸：跟随目标图；若要出 3:4，用 1200×1600
+
 
 **F3 分支 C — 纯文生图（无目标图，从零生成同风格图）**
 - 直接用 `style_prompt.md` 第 1 节中文版或第 2 节英文版，尺寸 1200×1600。
@@ -314,4 +309,3 @@ hairstyle, accessory or garment that comes from the first image.
 
 **注意**：方案二会**重排目标图**，人物位置、裁切、手与道具全部会被改成这套风格的模样——
 只在目标图本身已经是"单人立绘"时才成立，否则等于把目标图的内容丢掉一半。
-

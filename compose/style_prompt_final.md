@@ -72,7 +72,7 @@ mask 建议：{该锁住哪里、该放哪里}
 blurry, lowres, jpeg artifacts, watermark, signature, text, extra fingers, deformed limbs, bad anatomy, oversaturated, harsh halos, plastic skin, muddy colors, flat lighting, cluttered background
 
 【强度默认值】
-仅对 SD / Flux / ComfyUI 系有效；gpt-image-1 的 /images/edits 没有 strength 参数，改用 prompt 措辞 + mask 范围控制。
+gpt-image-1 的 /images/edits 没有 strength 参数，改用 prompt 措辞 + mask 范围控制。
 conservative 0.25–0.35（只换色调光影） / balanced 0.45–0.6（照片转插画，最常用） / strong 0.6–0.75（大改风格，结构易漂移）
 ```
 
