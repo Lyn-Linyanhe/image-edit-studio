@@ -34,5 +34,41 @@
     "url": "https://api.mikoto.vip/generated/954627dd479ff8d220f402eb5b064efb.png",
     "status": "done",
     "ts": "2026-09-21 19:42:18"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_masktest2_1k.png",
+    "url": "https://api.mikoto.vip/generated/96c26f9fea32f9f1ee9572bbbd01e6ad.png",
+    "status": "done",
+    "ts": "2026-09-22 10:35:53"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_masktest3_1k.png",
+    "url": "https://api.mikoto.vip/generated/8724ff9c6549349ab3a4a5ab3c40ade5.png",
+    "status": "done",
+    "ts": "2026-09-22 10:37:49"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_masktest4_1k.png",
+    "url": "https://api.mikoto.vip/generated/1507d2262bf2ee837c231e993852e269.png",
+    "status": "done",
+    "ts": "2026-09-22 10:39:33"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_masktest5_quality_high.png",
+    "url": "https://api.mikoto.vip/generated/6ab580a4290def6cbfdb0f294eaee80a.png",
+    "status": "done",
+    "ts": "2026-09-22 10:40:58"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_maskinvert_1k.png",
+    "url": "https://api.mikoto.vip/generated/e8ba14bc747de0bb7cc0d874ec5f82a2.png",
+    "status": "done",
+    "ts": "2026-09-22 10:43:09"
+  },
+  {
+    "out": "style-distill\\round_snow\\out_masktest6_norestore.png",
+    "url": "https://api.mikoto.vip/generated/40409ba7db1a9152a41ed5e6e62f1381.png",
+    "status": "done",
+    "ts": "2026-09-22 10:44:46"
   }
 ]

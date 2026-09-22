@@ -30,10 +30,16 @@ NEG_LIB = SKILL / "references" / "negative-library.md"
 FRAMING = ["取景", "景别", "半身", "全身", "特写", "大头", "镜头"]
 IDENTITY = ["锁死", "保留", "身份"]
 MONO_AUTH = ["黑白", "去色", "无彩色", "单色"]
+# 「不要整体去色」「不得去色」这类**否定式**不是授权，不能算"声明黑白"。
+# 口径由 prompt_masktest*.txt 暴露（含"不要整体去色"却被判成声明黑白 → 误报 2 个文件）。
+NEG_PREFIX = ("不要", "不得", "禁止", "不能", "不可", "无需", "勿", "别")
 # 出现这些＝这是"输出要彩色"的任务（例如上色任务），"黑白"只是在描述**输入**
 # —— 口径由 prompt_colorize.txt 暴露（它含"上色/配色参考"却含"黑白"）
 COLOR_TASK = ["上色", "配色参考"]
-KEEP_COLOR = ["保留颜色", "不剔除颜色", "保留配色"]
+KEEP_COLOR = ["保留颜色", "不剔除颜色", "保留配色", "保留原配色",
+              "不要改变配色", "不改变配色", "不要改变整体配色", "保持配色", "不要动配色"]
+# 冲突词要区分「要灰色」与「要色相稳定」：后者（…任何色相**变化**）在保留颜色的任务里是正确的负向。
+HUE_STABILITY_SUFFIX = ("变化", "偏移", "漂移", "迁移", "转换")
 # 守卫措辞有变体（prompt_cn 写的是「不要出现任何色相」）——精确短语匹配会误报，
 # 故按「组件」匹配：命中 ≥2 个组件才算有中性灰守卫。口径由真实样本校准得出。
 NEUTRAL_GUARD = ["不要任何色相", "不要出现任何色相", "不要暖黄", "不要偏褐",
@@ -52,6 +58,29 @@ def load_library_phrases() -> set[str]:
     return {m.strip() for m in re.findall(r"[（(]([^（）()]{6,60})[）)]", txt)}
 
 
+def mono_authorizations(t: str) -> list[str]:
+    """MONO_AUTH 里**非否定式**的出现才算"声明黑白"（"不要整体去色"不算）。"""
+    hits = []
+    for k in MONO_AUTH:
+        for m in re.finditer(re.escape(k), t):
+            pre = t[max(0, m.start() - 6):m.start()]
+            if not any(n in pre for n in NEG_PREFIX):
+                hits.append(k)
+                break
+    return hits
+
+
+def color_conflicts(t: str) -> list[str]:
+    """保留颜色的任务里，"要灰色"的守卫词才算冲突；"不要任何色相**变化**"是色相稳定，不算。"""
+    hits = []
+    for w in ("不要任何色相", "不要彩色"):
+        for m in re.finditer(re.escape(w), t):
+            if not t[m.end():m.end() + 2].startswith(HUE_STABILITY_SUFFIX):
+                hits.append(w)
+                break
+    return hits
+
+
 def lint(p: Path, lib: set[str]) -> list[tuple[str, str, str]]:
     t = p.read_text(encoding="utf-8")
     res: list[tuple[str, str, str]] = []
@@ -67,7 +96,7 @@ def lint(p: Path, lib: set[str]) -> list[tuple[str, str, str]]:
                 f"命中 {fh}" if fh else "【一个都没有】——缺取景约束，模型会自行决定景别与取景"))
 
     # L3 色彩守卫与授权一致
-    mono = [k for k in MONO_AUTH if k in t]
+    mono = mono_authorizations(t)
     keep = [k for k in KEEP_COLOR if k in t]
     color_task = [k for k in COLOR_TASK if k in t]
     if color_task:
@@ -79,9 +108,10 @@ def lint(p: Path, lib: set[str]) -> list[tuple[str, str, str]]:
                     f"声明黑白；互斥词残留 {bad}（应空）；中性灰守卫组件 {guard}（需 ≥2 个）"))
     elif keep:
         # 「不要去色」在"声明保留颜色"时**是正确的负向**，不能算冲突（第一版把它当冲突 → 误报 3 个文件）。
-        bad = [k for k in ("不要任何色相", "不要彩色") if k in t]
+        # 「不要任何色相**变化**」同理，是色相稳定要求，不是要灰色（第六次校准，由 prompt_masktest*.txt 暴露）。
+        bad = color_conflicts(t)
         res.append(("L3 色彩守卫一致性", "PASS" if not bad else "FAIL",
-                    f"声明保留颜色；冲突词 {bad}"))
+                    f"声明保留颜色 {keep[:2]}；冲突词 {bad}"))
     else:
         res.append(("L3 色彩守卫一致性", "WARN", "既没声明黑白也没声明保留颜色——无法判定一致性"))
 

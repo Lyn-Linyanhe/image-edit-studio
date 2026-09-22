@@ -267,6 +267,19 @@ def _fmt_sec(sec: float) -> str:
     return f"{sec:.0f} 秒" if sec < 90 else f"{sec/60:.1f} 分钟"
 
 
+# 实测投喂上限（MiB）：1.95 通过；2.12 与 2.15 均被 400 form field too large 拒绝。
+# 蒙版路径不走压缩梯子，所以它**必须**用这两个数做硬门禁，不能只报警。
+LIMIT_OK_MIB, LIMIT_BAD_MIB = 1.96, 2.12
+
+
+def scratch_path(out_p: Path, suffix: str) -> Path:
+    """副产物落盘位置：优先 out 同级的 work/（那里本就是草稿区），没有就放在 out 旁边。"""
+    d = out_p.parent / "work"
+    if not d.is_dir():
+        d = out_p.parent
+    return d / f"{out_p.stem}{suffix}"
+
+
 def report_budget(tw: int, th: int, total: int, note: str) -> None:
     """开工前的体积与时间预算报表。
 
@@ -274,7 +287,7 @@ def report_budget(tw: int, th: int, total: int, note: str) -> None:
     投喂体积由**目标尺寸**决定、与源图分辨率无关；输出体积 ≈ 像素数 × (1.2–2.0) B/px；
     取回速率实测 0.2–97 KB/s（常见 10–25）。
     """
-    LIMIT_OK, LIMIT_BAD = 1.96, 2.12          # MiB
+    LIMIT_OK, LIMIT_BAD = LIMIT_OK_MIB, LIMIT_BAD_MIB      # 见文件上部常量
     px = tw * th
     lo_mb, hi_mb = px * 1.2 / 1048576, px * 2.0 / 1048576
     print("  ── 开工前预算报表 ──")
@@ -322,6 +335,18 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
             print(f"  ⚠ 可改面积达 {cov:.0f}% → 基本等于整图重绘，只有蒙版保护的那部分能保住原像素",
                   flush=True)
         print(f"  发送 {total} B = {total/1048576:.2f} MiB  files={list(files)}", flush=True)
+        # 蒙版路径不走压缩梯子（发两张全尺寸图，体积约为单图的两倍）：实测 1536×1024 = 2.15 MiB
+        # 会被 400 拒绝、且此前默认不报警。故这里**无条件**报预算，超限直接拒发。
+        report_budget(tw, th, total, note)
+        red = scratch_path(out_p, ".redmark.png")
+        red.write_bytes(files["image[1]"][1])
+        print(f"  涂红图（模型收到的 image[1]）已落盘：{red}", flush=True)
+        print("    ↳ 发送前请先看一眼红色落在哪一块——落错了位置等于白跑一次调用", flush=True)
+        if total / 1048576 > LIMIT_OK_MIB and not dry_run:
+            print(f"  ✗ {total/1048576:.2f} MiB 超上限（{LIMIT_OK_MIB} MiB）→ **已拒绝发送**。", flush=True)
+            print("     蒙版路径不会自动压缩（它要发两张全尺寸图）。可选：把目标尺寸降到 1024×1024 附近、"
+                  "减少参考图、或改用整图 + 硬约束提示词。", flush=True)
+            return 1
     else:
         c2, r2, note = pick_reduction(content, refs, tw, th, pad, budget)
         print(f"  压缩策略: {note}", flush=True)
@@ -329,7 +354,7 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
         total = sum(len(v[1]) for v in files.values())
         print(f"  发送 {total} B = {total/1048576:.2f} MiB  files={list(files)}", flush=True)
 
-    if dry_run or ask:
+    if (dry_run or ask) and not mask_p:      # 蒙版分支上面已无条件报过预算，避免重复
         report_budget(tw, th, total, note)
     if dry_run:
         print("  dry-run：**未发送**。确认无误后去掉 --dry-run 并加上 --ask 或直接跑即可。", flush=True)
@@ -388,7 +413,12 @@ def main() -> int:
     ap.add_argument("--concurrency", type=int, default=1)
     ap.add_argument("--mask", default="",
                     help="局部改图蒙版（PNG）：白/不透明＝要改的区域，黑/透明＝保护不动。"
-                         "给了它就只重画这一块，其余像素物理不动（走 image[1] 的视觉蒙版通道）")
+                         "走 image[1] 的视觉蒙版通道。"
+                         "⚠ 蒙版路径要发两张全尺寸图（体积≈单图两倍）且**不走压缩梯子**："
+                         "超 1.96 MiB 会被直接拒发（实测 1536×1024 = 2.15 MiB → 400），"
+                         "请把目标尺寸控制在 1024×1024 附近。"
+                         "⚠ 实测：正向蒙版没能产生局部编辑（6 次调用均近原图返回），"
+                         "保护功能可用的是反向 --mask-invert")
     ap.add_argument("--mask-invert", action="store_true",
                     help="反向遮罩：蒙版里涂过的区域**被保留**，其余整张可改。"
                          "适合「保住脸/身份不动、只重画服装或姿态或背景」；只改一小块请用正向")
