@@ -30,6 +30,9 @@ NEG_LIB = SKILL / "references" / "negative-library.md"
 FRAMING = ["取景", "景别", "半身", "全身", "特写", "大头", "镜头"]
 IDENTITY = ["锁死", "保留", "身份"]
 MONO_AUTH = ["黑白", "去色", "无彩色", "单色"]
+# 出现这些＝这是"输出要彩色"的任务（例如上色任务），"黑白"只是在描述**输入**
+# —— 口径由 prompt_colorize.txt 暴露（它含"上色/配色参考"却含"黑白"）
+COLOR_TASK = ["上色", "配色参考"]
 KEEP_COLOR = ["保留颜色", "不剔除颜色", "保留配色"]
 # 守卫措辞有变体（prompt_cn 写的是「不要出现任何色相」）——精确短语匹配会误报，
 # 故按「组件」匹配：命中 ≥2 个组件才算有中性灰守卫。口径由真实样本校准得出。
@@ -66,6 +69,9 @@ def lint(p: Path, lib: set[str]) -> list[tuple[str, str, str]]:
     # L3 色彩守卫与授权一致
     mono = [k for k in MONO_AUTH if k in t]
     keep = [k for k in KEEP_COLOR if k in t]
+    color_task = [k for k in COLOR_TASK if k in t]
+    if color_task:
+        mono, keep = [], color_task or keep   # 明确是彩色输出的任务 → 归入"保留颜色"分支
     if mono and not keep:
         bad = [w for w in ("monochrome conversion", "full greyscale") if w in t]
         guard = [k for k in NEUTRAL_GUARD if k in t]
