@@ -31,6 +31,8 @@ for _s in (_sys.stdout, _sys.stderr):
 
 import argparse
 import base64
+import datetime
+import hashlib
 import io
 import json
 import os
@@ -280,6 +282,25 @@ def scratch_path(out_p: Path, suffix: str) -> Path:
     return d / f"{out_p.stem}{suffix}"
 
 
+LEDGER = Path(__file__).resolve().parent / "call_ledger.jsonl"
+
+
+def log_call(rec: dict) -> None:
+    """R1 调用台账：每次调用（含被拒发的）追加一条 JSONL。
+
+    动机（2026-09-22 实测）：原有 pending_urls.json 只记 out/url/status/ts 四个字段，
+    没有尺寸、提示词、模型、质量档、HTTP 码——当天两次撞上"无法核实当时到底请求了什么"
+    （一次 1254×1254 异常、一次六轮蒙版测试全靠对话记忆复盘）。
+    台账只追加、不改历史；写失败**绝不影响作业**。
+    """
+    try:
+        rec = {"ts": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), **rec}
+        with LEDGER.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception as e:                      # 台账永远不该让作业失败
+        print(f"  （台账写入失败，已忽略：{e}）", flush=True)
+
+
 def report_budget(tw: int, th: int, total: int, note: str) -> None:
     """开工前的体积与时间预算报表。
 
@@ -319,6 +340,29 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
     refs = [Image.open(p).convert("RGB") for p in refs_p]
     prompt = prompt_p.read_text(encoding="utf-8").strip()
 
+    # R2 比例守卫：--pad 默认 crop 会**静默居中裁掉**源图与目标比例不符的那些边。
+    # 2026-09-22 实测踩过：1067×711 的源配 1024×1024 的目标，会被裁掉 33% 的宽度，
+    # 而当时没有任何提示，导致一次测试的结论整个跑偏。
+    src_ar, tgt_ar = content.width / content.height, tw / th
+    if abs(src_ar - tgt_ar) / tgt_ar > 0.02:
+        if src_ar > tgt_ar:
+            keep = int(content.height * tgt_ar)
+            lost, side, px = 1 - keep / content.width, "左右", (content.width - keep) // 2
+            alt = "1536x1024" if tgt_ar < 1.4 else "1024x1536"
+        else:
+            keep = int(content.width / tgt_ar)
+            lost, side, px = 1 - keep / content.height, "上下", (content.height - keep) // 2
+            alt = "1024x1536" if tgt_ar > 0.75 else "1536x1024"
+        print(f"  ⚠ 比例不符：源 {content.width}×{content.height}（{src_ar:.3f}）"
+              f" vs 目标 {tw}×{th}（{tgt_ar:.3f}）", flush=True)
+        if pad == "crop":
+            print(f"     --pad crop 会**居中裁掉 {side}各 {px} px（共 {lost*100:.0f}% 的"
+                  f"{'宽度' if src_ar > tgt_ar else '高度'}）**；不想裁就用 `--pad pad`（补白边，"
+                  f"代价是画面里出现白边）或把尺寸改成 {alt}", flush=True)
+        else:
+            print(f"     --pad pad 会**补白边**（{'左右' if src_ar > tgt_ar else '上下'}合计约 "
+                  f"{lost*100:.0f}% 的画面是白边）；不想有白边就把尺寸改成 {alt}", flush=True)
+
     note = "（局部改图模式，蒙版不参与压缩梯子）"
     if mask_p:
         # 局部改图：蒙版本身不参与压缩梯子（它不含视觉信息），只报它的覆盖率
@@ -346,6 +390,13 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
             print(f"  ✗ {total/1048576:.2f} MiB 超上限（{LIMIT_OK_MIB} MiB）→ **已拒绝发送**。", flush=True)
             print("     蒙版路径不会自动压缩（它要发两张全尺寸图）。可选：把目标尺寸降到 1024×1024 附近、"
                   "减少参考图、或改用整图 + 硬约束提示词。", flush=True)
+            log_call({"out": str(out_p), "size": f"{tw}x{th}", "pad": pad, "quality": quality,
+                      "prompt": str(prompt_p),
+                      "prompt_sha1": hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:12],
+                      "content": str(content_p), "n_refs": len(refs_p),
+                      "mask": str(mask_p), "mask_invert": mask_invert, "coverage_pct": round(cov, 2),
+                      "bytes": total, "http": None, "result": "refused_over_limit",
+                      "note": f"{total/1048576:.2f} MiB > {LIMIT_OK_MIB} MiB"})
             return 1
     else:
         c2, r2, note = pick_reduction(content, refs, tw, th, pad, budget)
@@ -370,21 +421,37 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
 
     fields = {"model": model or G.MODEL, "prompt": prompt, "n": "1",
               "size": f"{tw}x{th}", "quality": quality}
+    base_rec = {"out": str(out_p), "size": f"{tw}x{th}", "pad": pad, "quality": quality,
+                "model": fields["model"], "prompt": str(prompt_p),
+                "prompt_sha1": hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:12],
+                "content": str(content_p), "n_refs": len(refs_p), "bytes": total,
+                "fields": list(files),
+                "mask": str(mask_p) if mask_p else None,
+                "mask_invert": mask_invert if mask_p else None,
+                "coverage_pct": round(cov, 2) if mask_p else None}
     t0 = time.time()
     st, txt = post_with_retry(fields, files)
-    print(f"  HTTP {st}   {time.time()-t0:.1f}s", flush=True)
+    elapsed = time.time() - t0
+    print(f"  HTTP {st}   {elapsed:.1f}s", flush=True)
     if st != 200:
         print("FAILED:\n" + txt[:1200])
+        log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
+                  "result": "failed", "error": txt[:300]})
         return 1
 
     item = (json.loads(txt).get("data") or [{}])[0]
     if item.get("b64_json"):
         out_p.write_bytes(base64.b64decode(item["b64_json"]))
+        log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
+                  "result": "b64", "out_bytes": out_p.stat().st_size})
     elif item.get("url"):
         print(f"  result url: {item['url']}", flush=True)   # 先打印再下载
         note_pending(out_p, item["url"], "pending")         # 生成即落盘，下载慢/失败也不丢 URL
         download(item["url"], out_p)
         note_pending(out_p, item["url"], "done")
+        log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
+                  "result": "url", "url": item["url"],
+                  "out_bytes": out_p.stat().st_size if out_p.exists() else None})
     else:
         print("no image in response: " + txt[:400])
         return 1

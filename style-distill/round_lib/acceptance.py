@@ -172,17 +172,20 @@ def main() -> int:
     # ---------- C. 流程与工程 ----------
     print("\n【C】流程与工程")
     comfy = []
+    scanned = 0
     for p in ROOT.rglob("*"):
         if not p.is_file():
             continue
-        s = str(p)
-        if any(x in s for x in ("node_modules", "npm-cache", "_backup", ".git")):
-            continue
-        if "__pycache__" in s or s.endswith(".pyc"):
-            continue      # 字节码缓存里带着本脚本自己的源码（含检索词）→ 是构建产物，不算残留
-        if p.name == "acceptance.py":
-            continue      # 检查脚本自己的检索词不算残留（第一版把自己的关键词误报成残留）
         rel = str(p.relative_to(ROOT))
+        top = rel.split(os.sep)[0]
+        # ⚠ 原来用子串 ".git" 判断 → **任何路径含 ".git" 的文件永不被扫描**
+        # （活例：`.gitignore` 自己含 comfy 却从来不报）。改为只跳 `.git` 目录本身。
+        if top == ".git" or any(x in rel for x in ("node_modules", "npm-cache", "_backup")):
+            continue
+        if "__pycache__" in rel or rel.endswith(".pyc"):
+            continue      # 字节码缓存里带着本脚本自己的源码（含检索词）→ 是构建产物，不算残留
+        if p.name in ("acceptance.py", ".gitignore"):
+            continue      # 检查脚本与忽略规则文件里必须写出检索词本身，不算残留
         if "comfy" in rel.lower():
             comfy.append(f"{rel}（路径名）")
             continue
@@ -191,12 +194,14 @@ def main() -> int:
                           # 残留指代码/配置/资产，不指"有人在文档里写下了这个词"
         if p.stat().st_size > 3 * 1024 * 1024:
             continue
+        scanned += 1
         try:
             if "comfy" in p.read_text(encoding="utf-8", errors="ignore").lower():
-                comfy.append(str(p.relative_to(ROOT)))
+                comfy.append(rel)
         except Exception:
             pass
-    check("C1 无 ComfyUI 残留", not comfy, "0 处" if not comfy else f"命中: {comfy}")
+    check("C1 无 ComfyUI 残留", not comfy,
+          f"扫过 {scanned} 个文件（.md 只查路径名），0 处" if not comfy else f"命中: {comfy}")
 
     deliver = []
     for rd in (RM / "README.md", RS / "README.md"):
@@ -257,6 +262,36 @@ def main() -> int:
               f"returncode={r.returncode}；拒绝提示={refused}；未发出请求={never_sent}")
         check("C9 蒙版涂红图发送前落盘", bool(dumped),
               f"落盘 {[p.name for p in dumped]}" if dumped else "未落盘（发送前无法确认涂红位置）")
+
+    # R1 调用台账：C8 那次被拒发应当已追加一条可回溯记录
+    ledger = RL / "call_ledger.jsonl"
+    need = {"ts", "out", "size", "pad", "quality", "prompt", "prompt_sha1", "content", "bytes", "result"}
+    rec = None
+    if ledger.exists():
+        lines = [x for x in ledger.read_text(encoding="utf-8").strip().splitlines() if x.strip()]
+        if lines:
+            rec = json.loads(lines[-1])
+    have = set(rec or {})
+    check("C10 调用台账可回溯（每次调用留参数）", rec is not None and need <= have,
+          f"台账 {len(lines) if ledger.exists() else 0} 条；末条缺字段 {sorted(need - have)}"
+          if rec else "台账不存在或无记录")
+
+    # R2 比例守卫：几何不符必须出声，相符时不许误报
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        sq = tdp / "square.png"
+        Image.new("RGB", (1024, 1024), (128, 128, 128)).save(sq)
+        r_bad = sh([sys.executable, str(RL / "run_round.py"), "--content",
+                    str(RM / "work" / "feed_char_169.png"), "--prompt",
+                    str(RM / "prompt_threeview_v15.txt"), "--out", str(tdp / "a.png"),
+                    "--size", "1024x1024", "--dry-run"])
+        r_ok = sh([sys.executable, str(RL / "run_round.py"), "--content", str(sq),
+                   "--prompt", str(RM / "prompt_threeview_v15.txt"), "--out", str(tdp / "b.png"),
+                   "--size", "1024x1024", "--dry-run"])
+        check("C11 比例守卫：不符时警告、相符时不误报",
+              ("比例不符" in r_bad.stdout) and ("比例不符" not in r_ok.stdout),
+              f"1.78:1 源→1024² {'有' if '比例不符' in r_bad.stdout else '无'}警告；"
+              f"1:1 源→1024² {'有' if '比例不符' in r_ok.stdout else '无'}警告")
 
     # ---------- 汇总 ----------
     n = len(RESULTS)

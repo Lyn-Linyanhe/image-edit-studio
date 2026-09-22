@@ -49,6 +49,8 @@ style-distill/target/r1/crops/
 # ── 6. 运行时产物 / 缓存 / 手工备份 ─────────────────────────────
 # *.bak 是 git 之前的手工备份做法（如 mask_edit_app.py.bak），
 # 现由版本历史取代，故排除。
+# 调用台账（R1）：每次调用追加一条，属运行日志——不进库，否则每跑一次都会弄脏工作区
+style-distill/round_lib/call_ledger.jsonl
 __pycache__/
 *.pyc
 *.log
