@@ -18,7 +18,7 @@ from mask_edit_app import normalise_to_size          # noqa: E402
 
 TW = TH = 1024
 IN = Path(sys.argv[1]) if len(sys.argv) > 3 else ROOT / "style-distill/round_snow/input/C_snow_169.png"
-OUT = Path(sys.argv[2]) if len(sys.argv) > 3 else ROOT / "style-distill/round_snow/out_masktest2_1k.png"
+OUT = Path(sys.argv[2]) if len(sys.argv) > 3 else ROOT / "style-distill/round_snow/lab/out_masktest2_1k.png"
 MK = Path(sys.argv[3]) if len(sys.argv) > 3 else ROOT / "style-distill/round_snow/work/mask_ornament.png"
 a = Image.open(IN).convert("RGB")
 out = Image.open(OUT).convert("RGB")

@@ -88,7 +88,7 @@ def main() -> int:
         raise SystemExit("--box 个数必须与图片个数一致")
 
     print(f"{'文件':30s} {'图高px':>7s} {'颈在%':>6s} {'头高px':>7s} {'头身比':>7s} "
-          f"{'头宽':>5s} {'肩宽':>5s} {'肩宽/头宽':>9s} {'底边贴边':>8s}")
+          f"{'头宽':>5s} {'肩宽':>5s} {'肩宽/头宽':>9s}  判读")
     rows = []
     for item, bx in zip(a.items, a.box):
         box = tuple(int(v) for v in bx.split(","))
@@ -97,12 +97,22 @@ def main() -> int:
             print(f"{Path(item).name:30s}   量不出来（人物没找到或裁框不对）")
             continue
         rows.append(r)
+        # R11 修正（2026-09-22）：原来即使"底边贴边"也照样把头身比打出来，
+        # 于是 11.8 这种被切过的半身像读数被读走了。**不可用就不报数**。
+        ht = r["heads_tall"]
+        if r["touches_bottom"]:
+            ratio_s, note = "  —  ", "人物被裁框切到 → 头身比不可用（不报数）"
+        elif not (2.5 <= ht <= 10.0):
+            ratio_s, note = "  —  ", f"头身比 {ht} 超出合理区间 2.5–10 → 颈线没找准，不报数"
+        else:
+            ratio_s, note = f"{ht:7.2f}", ""
         print(f"{r['file']:30s} {r['figure_h']:7d} {r['neck_y_pct']:6.1f} {r['head_h']:7d} "
-              f"{r['heads_tall']:7.2f} {r['head_w']:5d} {r['shoulder_w']:5d} "
-              f"{r['shoulder_over_head_w']:9.2f} {'是(慎用)' if r['touches_bottom'] else '否':>8s}")
+              f"{ratio_s:>7s} {r['head_w']:5d} {r['shoulder_w']:5d} "
+              f"{r['shoulder_over_head_w']:9.2f}  {note or '可用'}")
     print("\n判读：头身比越大越接近成人（青年女性约 7；幼儿约 5）。"
           "\n肩宽/头宽比越大越是成人（成人约 1.8–2.0；儿童约 1.2–1.4）。"
-          "\n底边贴边=人物被裁框切到，头身比会偏小，该行不可用。")
+          "\n⚠ 人物未完整入镜（半身/大头）时头身比**在数学上不成立**，本工具一律不报数。"
+          "\n   半身像请只读「肩宽/头宽」这一列，且要人眼确认颈线找准了。")
     return 0
 
 

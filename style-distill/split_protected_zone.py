@@ -18,7 +18,7 @@ from mask_edit_app import normalise_to_size          # noqa: E402
 
 TW = TH = 1024
 a = Image.open(ROOT / "style-distill/round_snow/input/C_snow_169.png").convert("RGB")
-out = Image.open(ROOT / "style-distill/round_snow/out_maskinvert_1k.png").convert("RGB")
+out = Image.open(ROOT / "style-distill/round_snow/lab/out_maskinvert_1k.png").convert("RGB")
 m = Image.open(ROOT / "style-distill/round_snow/work/mask_face.png").convert("L")
 
 fit = normalise_to_size(a, TW, TH, "crop")

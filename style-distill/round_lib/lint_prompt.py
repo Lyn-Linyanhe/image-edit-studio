@@ -9,7 +9,16 @@
      声明保留颜色 → 负向不得含"不要任何色相"
   L4 身份／锁死段存在
   L5 互斥自查：同一主题在正向与负向里出现相反要求（外框／字幕／背景这几类已知易错项）
-  L6 失败态是否抄自词库：与 references/negative-library.md 的短语求交集
+
+**已删除 L6（2026-09-22）**：原 L6 想检查"失败态是否抄自词库"，但
+  ① 第一版从（）里抽短语，抽到的是注释文字，33 个文件全报 0；
+  ② 改从 ``` 代码块抽（能抽出 59 条干净英文短语）后实测**只有 3/33 份提示词含英文短语**——
+     因为**词库是英文、提示词是中文**，英文匹配在本仓语境下没有判别力。
+  所以这条不具备"可机械判定"的资格，改为在汇总处打印一句说明，把"抄词库"交回
+  SKILL.md 作业纪律（拼提示词时逐条打开词库）手工执行。不保留会误导人的 0 命中。
+
+豁免（lint_waivers.txt）：已交付轮次的提示词是**当时实际发出的原文**，不能为过校验而改写。
+  豁免项在汇总里单独列出并附理由，**不会把 FAIL 变成 PASS**。
 
 用法：python lint_prompt.py <提示词文件...>  或  --all-rounds
 """
@@ -21,9 +30,6 @@ import sys
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
-
-SKILL = Path.home() / ".agents" / "skills" / "style-distill"
-NEG_LIB = SKILL / "references" / "negative-library.md"
 
 # ⚠ 不要放"构图"进来：C2 含"两格构图"这类更泛的表述，会把"未指定景别"漏报成通过。
 # 构图＝内容排布，取景/景别＝镜头尺度，两者不是一回事。
@@ -51,13 +57,6 @@ EXCLUSIVE_PAIRS = [
 ]
 
 
-def load_library_phrases() -> set[str]:
-    if not NEG_LIB.exists():
-        return set()
-    txt = NEG_LIB.read_text(encoding="utf-8")
-    return {m.strip() for m in re.findall(r"[（(]([^（）()]{6,60})[）)]", txt)}
-
-
 def mono_authorizations(t: str) -> list[str]:
     """MONO_AUTH 里**非否定式**的出现才算"声明黑白"（"不要整体去色"不算）。"""
     hits = []
@@ -81,7 +80,7 @@ def color_conflicts(t: str) -> list[str]:
     return hits
 
 
-def lint(p: Path, lib: set[str]) -> list[tuple[str, str, str]]:
+def lint(p: Path) -> list[tuple[str, str, str]]:
     t = p.read_text(encoding="utf-8")
     res: list[tuple[str, str, str]] = []
 
@@ -131,16 +130,27 @@ def lint(p: Path, lib: set[str]) -> list[tuple[str, str, str]]:
     res.append(("L5 正负互斥自查", "PASS" if not conflicts else "FAIL",
                 f"发现互斥: {conflicts}" if conflicts else "未发现已知互斥对（外框/字幕/背景）"))
 
-    # L6 失败态是否抄自词库
-    if lib:
-        neg_text = neg_block
-        hit = [ph for ph in lib if ph and ph in neg_text]
-        res.append(("L6 失败态抄自词库（启发式·未验证）", "WARN",
-                    f"词库交集 {len(hit)} 条。**匹配策略未验证**：第一版从括号抽短语，抽到的是注释文字，"
-                    f"对全部 33 个文件都报 0 —— 因此这条只作提示，不能当作 FAIL 依据"))
-    else:
-        res.append(("L6 失败态抄自词库", "WARN", "词库未找到，跳过"))
+    # L6 已删除（见文件头说明）：英文词库对中文提示词无判别力，逐文件报 0 只会变成噪声。
     return res
+
+
+WAIVERS = Path(__file__).resolve().parent / "lint_waivers.txt"
+
+
+def load_waivers() -> dict[tuple[str, str], str]:
+    """读取豁免清单：{(提示词文件名, 检查项前缀): 理由}。"""
+    out: dict[tuple[str, str], str] = {}
+    if not WAIVERS.exists():
+        return out
+    for line in WAIVERS.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "|" not in line:
+            continue
+        parts = [x.strip() for x in line.split("|")]
+        if len(parts) < 3:
+            continue
+        out[(Path(parts[0]).name, parts[1])] = " ".join(parts[2:])
+    return out
 
 
 def main() -> int:
@@ -155,27 +165,41 @@ def main() -> int:
     if not files:
         raise SystemExit("给提示词文件，或用 --all-rounds")
 
-    lib = load_library_phrases()
-    print(f"词库短语 {len(lib)} 条；检查 {len(files)} 个提示词\n")
+    waivers = load_waivers()
+    print(f"检查 {len(files)} 个提示词；豁免 {len(waivers)} 条\n")
     bad: list[str] = []
+    waived: list[str] = []
     for p in files:
         if not p.exists():
             print(f"[跳过] {p} 不存在")
             continue
-        rows = lint(p, lib)
+        rows = lint(p)
+        fails = [(name, ev) for name, st, ev in rows if st == "FAIL"]
+        wmap: dict[str, str] = {}
+        for name, _ev in fails:
+            key = next((k for k in waivers if k[0] == p.name and name.startswith(k[1])), None)
+            if key:
+                wmap[name] = waivers[key]
+            else:
+                bad.append(f"{p.name} :: {name}")
         flags = [r for r in rows if r[1] != "PASS"]
-        mark = "OK  " if not flags else ("FAIL" if any(r[1] == "FAIL" for r in rows) else "WARN")
+        mark = ("豁免" if (fails and len(wmap) == len(fails))
+                else "FAIL" if fails else "WARN" if flags else "OK  ")
         print(f"[{mark}] {p.name}")
         for name, st, ev in rows:
             if st != "PASS":
                 print(f"        {st} {name}: {ev}")
-                if st == "FAIL":
-                    bad.append(f"{p.name} :: {name}")
+            if st == "FAIL" and name in wmap:
+                waived.append(f"{p.name} :: {name} —— {wmap[name]}")
         if not flags:
-            print("        六项全过")
-    print(f"\n汇总：{len(files)} 个文件，{len(bad)} 条 FAIL")
+            print("        五项全过")
+    print(f"\n汇总：{len(files)} 个文件，{len(bad)} 条未处置 FAIL，{len(waived)} 条已豁免")
     for b in bad:
-        print("  - " + b)
+        print("  ✗ " + b)
+    for w in waived:
+        print("  · 已豁免 " + w)
+    print("\n注：失败态词库覆盖检查（原 L6）已删除——词库是英文、提示词是中文，"
+          "英文短语仅命中 3/33，无判别力。\n    「拼提示词时逐条打开词库抄失败态」按 SKILL.md 作业纪律手工执行。")
     return 0
 
 

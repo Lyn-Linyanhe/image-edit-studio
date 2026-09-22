@@ -215,10 +215,16 @@ def main() -> int:
     check("C2 交付件全部在场", okn == len(deliver) and len(deliver) >= 12,
           f"{okn}/{len(deliver)} 在场")
 
-    top_png = sorted(p.name for p in RM.glob("*.png"))
-    dn = {n for n, _, _ in deliver if (RM / n).exists()}
-    extra = [x for x in top_png if x not in dn]
-    check("C3 顶层 PNG 只有交付件", not extra, f"顶层 PNG {len(top_png)} 个，非交付件 {len(extra)} 个" + (f": {extra}" if extra else ""))
+    # R10：顶层 PNG 只能是交付件——原来只管 round_manga，round_snow 顶层曾混放 7 个实验件
+    extra_all = {}
+    for rd in (RM, RS):
+        dn = {n for n, _, _ in deliver if (rd / n).exists()}
+        e = [p.name for p in sorted(rd.glob("*.png")) if p.name not in dn]
+        if e:
+            extra_all[rd.name] = e
+    detail = ("、".join(f"{k}: {v}" for k, v in extra_all.items()) if extra_all
+              else f"{RM.name}、{RS.name} 顶层均只有交付件")
+    check("C3 顶层 PNG 只有交付件（两个 round）", not extra_all, detail)
 
     gi = sh(["git", "check-ignore", "-v", "style-distill/round_lib/run_round.py"]).stdout.strip()
     check("C4 .gitignore 未误伤工具链", gi == "", "未被忽略 ✓" if not gi else f"被忽略 ← {gi}")

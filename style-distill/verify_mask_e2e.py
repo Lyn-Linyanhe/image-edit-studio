@@ -26,6 +26,7 @@ for cand in (ROOT / "compose" / "images", ROOT / "compose"):
 
 IN, OUT, MASK = (Path(v) for v in sys.argv[1:4])
 TW, TH = int(sys.argv[4]), int(sys.argv[5])
+PAD = sys.argv[6] if len(sys.argv) > 6 else "crop"      # 必须与发送时用的一致，否则坐标系又对不上
 
 try:
     from mask_edit_app import normalise_to_size          # 直接用被测代码本体
@@ -51,10 +52,10 @@ m0 = Image.open(MASK).convert("L")
 print(f"  原文 {a.size}   请求目标 {TW}x{TH}   实得输出 {out.size}   蒙版 {m0.size}")
 print(f"  几何换算：{src_mod}")
 
-fit = normalise_to_size(a, TW, TH, "crop")                # 模型真正收到的画面
+fit = normalise_to_size(a, TW, TH, PAD)                # 模型真正收到的画面
 if m0.size != a.size:
     m0 = m0.resize(a.size, Image.LANCZOS)
-fitmask = normalise_to_size(m0, TW, TH, "crop")           # 蒙版走同一裁切
+fitmask = normalise_to_size(m0, TW, TH, PAD)           # 蒙版走同一条归一化
 
 print(f"  裁切后投喂 {fit.size}（原画幅被保留的比例：{fit.width/fit.height * a.height/a.width * 100:.0f}% 的宽度）")
 

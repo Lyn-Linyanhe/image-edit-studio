@@ -335,7 +335,7 @@ def report_budget(tw: int, th: int, total: int, note: str) -> None:
 def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
             tw: int, th: int, pad: str, quality: str, budget: int, check_target: str | None,
             mask_p: Path | None = None, model: str = "", dry_run: bool = False, ask: bool = False,
-            mask_invert: bool = False) -> int:
+            mask_invert: bool = False, mask_primary: bool = False) -> int:
     content = Image.open(content_p).convert("RGB")
     refs = [Image.open(p).convert("RGB") for p in refs_p]
     prompt = prompt_p.read_text(encoding="utf-8").strip()
@@ -367,11 +367,26 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
     if mask_p:
         # 局部改图：蒙版本身不参与压缩梯子（它不含视觉信息），只报它的覆盖率
         files, cov = build_with_mask(content, mask_p, tw, th, pad, refs, invert=mask_invert)
+        vis_bytes = files["image[1]"][1]
+        if mask_primary:
+            # 实验：把涂红图当**主图**送（不发干净原图）。机制：抽掉"照抄原图把它恢复"的路径，
+            # 顺带把体积砍半（少一张全尺寸图）。若有效则体积门禁问题一并解决。
+            files = {"image": ("image.png", vis_bytes, "image/png"),
+                     "mask": files["mask"]}
         total = sum(len(v[1]) for v in files.values())
         mode = ("反向：蒙版里涂过的区域**被保留**，其余整张可改" if mask_invert
                 else "正向：蒙版里涂过的区域**被修改**，其余像素物理不动")
         print(f"  局部改图模式：{mode}", flush=True)
         print(f"  可改面积 {cov:.1f}%（这部分会被硬涂红，原有信息整块抹掉、交给模型重建）", flush=True)
+        if mask_primary:
+            print("  --mask-primary：主图就是涂红图（不发干净原图）→ 实测**能产生编辑**（蒙版内改动>120 占 25%）；"
+                  "代价是整图会被轻微微调（均值约 5/255），不是逐像素保护", flush=True)
+        elif not mask_invert:
+            print("  ⚠ 实测（R5 矩阵，2026-09-22）：正向蒙版**不加 --mask-primary** 时，", flush=True)
+            print("     模型会照抄原图把那块恢复 → 返回近乎原图（此前 6 次调用全部如此，"
+                  "蒙版内最大改动仅 41–59）。", flush=True)
+            print("     → **要真的改就用 --mask-primary**；只在你要「验证保护区逐像素没动」时才用这种配置。",
+                  flush=True)
         if mask_invert:
             print("    ↳ 反向模式：保护区之外的**整张图**都会重建；"
                   "若只想改一小块，请改用正向遮罩", flush=True)
@@ -383,7 +398,7 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
         # 会被 400 拒绝、且此前默认不报警。故这里**无条件**报预算，超限直接拒发。
         report_budget(tw, th, total, note)
         red = scratch_path(out_p, ".redmark.png")
-        red.write_bytes(files["image[1]"][1])
+        red.write_bytes(vis_bytes)
         print(f"  涂红图（模型收到的 image[1]）已落盘：{red}", flush=True)
         print("    ↳ 发送前请先看一眼红色落在哪一块——落错了位置等于白跑一次调用", flush=True)
         if total / 1048576 > LIMIT_OK_MIB and not dry_run:
@@ -481,14 +496,17 @@ def main() -> int:
     ap.add_argument("--mask", default="",
                     help="局部改图蒙版（PNG）：白/不透明＝要改的区域，黑/透明＝保护不动。"
                          "走 image[1] 的视觉蒙版通道。"
-                         "⚠ 蒙版路径要发两张全尺寸图（体积≈单图两倍）且**不走压缩梯子**："
-                         "超 1.96 MiB 会被直接拒发（实测 1536×1024 = 2.15 MiB → 400），"
-                         "请把目标尺寸控制在 1024×1024 附近。"
-                         "⚠ 实测：正向蒙版没能产生局部编辑（6 次调用均近原图返回），"
-                         "保护功能可用的是反向 --mask-invert")
+                         "⚠ **正向改图请配 --mask-primary**（否则实测返回近原图、不会改）。"
+                         "⚠ 蒙版路径**不走压缩梯子**：发两张全尺寸图时超 1.96 MiB 会被直接拒发"
+                         "（实测 1536×1024 = 2.15 MiB → 400）；配 --mask-primary 只发一张，2K 也放得下")
     ap.add_argument("--mask-invert", action="store_true",
                     help="反向遮罩：蒙版里涂过的区域**被保留**，其余整张可改。"
                          "适合「保住脸/身份不动、只重画服装或姿态或背景」；只改一小块请用正向")
+    ap.add_argument("--mask-primary", action="store_true",
+                    help="**正向局部改图要用它**：把涂红的视觉蒙版当主图发送（不发干净原图）。"
+                         "实测要点：不发干净原图，模型才无法「照抄原图恢复」，才会真的重画那块；"
+                         "副作用①整图会被轻微微调（均值约 5/255，非逐像素保护）；"
+                         "②体积砍半 → 2K（2048×1152 = 1.29 MiB）也能发")
     ap.add_argument("--model", default="", help="覆盖模型（默认 gpt-image-2；备用通道：grok-imagine-edit）")
     ap.add_argument("--dry-run", action="store_true",
                     help="只做预算报表（投喂体积／是否被压缩／输出体积／取回时间预估），**不发送**")
@@ -514,7 +532,7 @@ def main() -> int:
             print(f"===== {p.name} -> {o.name} =====", flush=True)
             rc |= run_one(c, r, p, o, tw, th, a.pad, a.quality, budget, a.check_target or None,
                           mask_p=mask_p, model=a.model, dry_run=a.dry_run, ask=a.ask,
-                          mask_invert=a.mask_invert)
+                          mask_invert=a.mask_invert, mask_primary=a.mask_primary)
         return rc
 
     print(f"并行发送 {len(jobs)} 个方案（并发 {a.concurrency}）", flush=True)
@@ -524,7 +542,7 @@ def main() -> int:
             print(f"  -> {p.name} => {o.name}", flush=True)
             futs.append(ex.submit(run_one, c, r, p, o, tw, th, a.pad, a.quality, budget,
                                   a.check_target or None, mask_p, a.model, a.dry_run, a.ask,
-                                  a.mask_invert))
+                                  a.mask_invert, a.mask_primary))
         return max(f.result() for f in futs)
 
 
