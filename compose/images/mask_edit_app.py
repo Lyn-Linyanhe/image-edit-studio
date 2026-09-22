@@ -2074,11 +2074,26 @@ def gallery_category(rel: str) -> str:
     return "process"
 
 
+def scan_roots():
+    """只扫**本轮**目录（style-distill/<最新的 round_*>）。
+
+    口径来自用户："只从最近这轮开始，从这轮起才计入，之前的全部隐藏"。
+    自动识别本轮，所以开新一轮时画廊会自动跟过去，不需要改配置。
+    """
+    latest = latest_round()
+    if latest:
+        d = os.path.join(GALLERY_REL_BASE, "style-distill", latest)
+        if os.path.isdir(d):
+            return [d]
+    return list(GALLERY_ROOTS)          # 兜底：识别不到本轮时不至于空白
+
+
 def _gallery_scan():
+    """按修改时间倒序列出**本轮**目录里的图片（更早的轮次不计入、不显示）。"""
     import os
 
     found = []
-    for root in GALLERY_ROOTS:
+    for root in scan_roots():
         if not os.path.isdir(root):
             continue
         for dirpath, dirnames, filenames in os.walk(root):
@@ -2130,21 +2145,19 @@ def gallery_select():
     """
     rows = _gallery_scan()
     latest = latest_round()
-    prefix = ("style-distill/" + latest + "/") if latest else "\x00"
     kept, process_seen = [], 0
     for row in rows:
         if row["cat"] == "process":
             process_seen += 1
             if process_seen > GALLERY_PROCESS_CAP:
                 continue
-        row["scope"] = "latest" if row["rel"].startswith(prefix) else "older"
         kept.append(row)
     counts = {key: 0 for key, _ in CATEGORIES}
     counts["all"] = len(kept)
     for row in kept:
         counts[row["cat"]] = counts.get(row["cat"], 0) + 1
-    counts["latest"] = sum(1 for r in kept if r["scope"] == "latest")
-    counts["older"] = len(kept) - counts["latest"]
+    counts["latest"] = len(kept)                 # 现在"计入的"就是"本轮的"
+    counts["older"] = 0                          # 更早的轮次不计入，也不显示
     counts["_latest_round"] = latest
     return kept, counts
 
@@ -2172,10 +2185,9 @@ def gallery_html() -> str:
     for row in rows:
         full, rel = row["full"], row["rel"]
         cat = row["cat"]
-        scope = row.get("scope", "older")
         q = urllib.parse.quote(full)
         cards.append(
-            f'<figure class="card" data-cat="{cat}" data-scope="{scope}">'
+            f'<figure class="card" data-cat="{cat}">'
             f'<img class="thumb" loading="lazy" src="/gallery/img?p={q}"'
             f' data-full="/gallery/img?p={q}"'
             f' data-file="{html.escape(full, quote=True)}"'
@@ -2249,16 +2261,10 @@ def gallery_html() -> str:
         '.lb-pos{color:#98a2b3;font-size:12px;font-variant-numeric:tabular-nums}'
         '</style></head><body>'
         '<header><h1>图片</h1>'
-        f'<div class="tabs scope">'
-        f'<button type="button" class="tab on" data-scope="latest">本轮'
-        f'<span class="n">{counts.get("latest", 0)}</span></button>'
-        f'<button type="button" class="tab" data-scope="all">全部历史'
-        f'<span class="n">{counts.get("older", 0)}</span></button>'
-        '</div>'
         f'<div class="tabs">{tabs}</div>'
         '<input id="q" placeholder="按文件名 / 路径筛选（如 v2、round_arcade）">'
-        f'<span class="hint" id="hint">默认只看本轮「{counts.get("_latest_round") or "未识别"}」'
-        f'（{counts.get("latest", 0)} 张）；点「全部历史」看其余 {counts.get("older", 0)} 张 · '
+        f'<span class="hint" id="hint">只计入本轮「{counts.get("_latest_round") or "未识别"}」'
+        f'（{counts.get("latest", 0)} 张）；更早的轮次不计入、也不显示 · '
         f'点图页内预览，←/→ 翻图'
         f'{_input_note()}</span>'
         '</header><main id="grid">'
@@ -2289,19 +2295,16 @@ def gallery_html() -> str:
         'lbName=document.getElementById("lb-name"),lbRel=document.getElementById("lb-rel"),'
         'lbRaw=document.getElementById("lb-raw"),lbCopy=document.getElementById("lb-copy"),'
         'lbPos=document.getElementById("lb-pos");'
-        'let cat="all",scope="latest",visible=[],at=0;'
-        'const scopeBtns=[...document.querySelectorAll(".tabs.scope .tab")];'
+        'let cat="all",visible=[],at=0;'
         'function refresh(){visible=cards.filter(c=>c.style.display!=="none");}'
         'function apply(){const s=q.value.trim().toLowerCase();let total=0,shown=0;'
-        'for(const c of cards){const okScope=(scope==="all"||c.dataset.scope===scope);'
-        'const okCat=okScope&&(cat==="all"||c.dataset.cat===cat);'
+        'for(const c of cards){const okCat=(cat==="all"||c.dataset.cat===cat);'
         'if(okCat)total++;const hit=okCat&&(!s||c.textContent.toLowerCase().includes(s));'
         'c.style.display=hit?"":"none";if(hit)shown++;}'
         'refresh();'
         'hint.textContent=`显示 ${shown} / ${total} 张`+(s?`（筛选「${q.value.trim()}」）`:"")'
         '+` · 点图页内预览，←/→ 翻图`;'
         'for(const t of tabs)t.classList.toggle("on",t.dataset.cat===cat);'
-        'for(const b of scopeBtns)b.classList.toggle("on",b.dataset.scope===scope);'
         'if(!lb.hidden)show(at);}'
         'function show(i){if(!visible.length){close_();return;}'
         'at=(i%visible.length+visible.length)%visible.length;'
@@ -2317,7 +2320,6 @@ def gallery_html() -> str:
         'function close_(){lb.hidden=true;lbImg.removeAttribute("src");'
         'document.body.classList.remove("locked");}'
         'for(const t of tabs)t.addEventListener("click",()=>{cat=t.dataset.cat;apply();});'
-        'for(const b of scopeBtns)b.addEventListener("click",()=>{scope=b.dataset.scope;apply();});'
         'q.addEventListener("input",apply);'
         'grid.addEventListener("click",e=>{'
         'if(e.target.closest("button[data-copy]")){'
