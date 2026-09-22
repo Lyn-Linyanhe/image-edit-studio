@@ -120,15 +120,28 @@ def pick_reduction(content: Image.Image, refs: list[Image.Image],
 # ---------- 发送与下载 ----------
 
 def post_with_retry(fields: dict, files: dict, attempts: int = 3, timeout: int = 900):
+    """发送，并对**传输层**瞬时失败自动重试。
+
+    ⚠ 2026-09-22 实测修正：原来的 try/except 是**死代码**——`gen.call` 自己不抛异常，
+    而是把任何异常吞成 `(-1, "类型: 消息")` 返回，所以模块头承诺的
+    "上传阶段 SSL UNEXPECTED_EOF 自动重试"**从未真正生效**（实测撞上
+    `UNEXPECTED_EOF_WHILE_READING` 时直接 FAILED、没有一句重试日志）。
+    现改为**按返回值**判定：-1（传输层失败）与 5xx 可重试；4xx 是载荷/参数问题，
+    重试没有意义，直接返回交给调用方。
+    """
     last = None
     for i in range(1, attempts + 1):
         try:
-            return G.call(fields, files, timeout=timeout)
-        except Exception as e:  # noqa: BLE001
-            last = e
-            print(f"   发送第 {i}/{attempts} 次失败: {type(e).__name__}: {e}", flush=True)
+            st, txt = G.call(fields, files, timeout=timeout)
+        except Exception as e:  # noqa: BLE001  （gen.call 不抛，但别赌它以后不抛）
+            st, txt = -1, f"{type(e).__name__}: {e}"
+        if st != -1 and st < 500:
+            return st, txt
+        last = f"HTTP {st}: {str(txt)[:200]}"
+        print(f"   发送第 {i}/{attempts} 次失败（传输层）：{last}", flush=True)
+        if i < attempts:
             time.sleep(min(3 * i, 15))
-    raise SystemExit(f"   发送重试 {attempts} 次仍失败：{last}")
+    return -1, f"重试 {attempts} 次仍失败：{last}"
 
 
 def download(url: str, out: Path, attempts: int = 8, timeout: int = 600) -> None:
