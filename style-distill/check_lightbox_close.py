@@ -47,6 +47,11 @@ checks = [
     ("光标 grab/grabbing + 触屏 touch-action", "cursor:grab;touch-action:none" in page
      and "#lb-img.dragging{cursor:grabbing}" in page),
     ("禁掉原生图片拖拽", 'lbImg.addEventListener("dragstart",e=>e.preventDefault());' in page),
+    # ---- 放大后四边都要能看到（flex 居中陷阱）
+    ("舞台不再用 flex 居中（否则溢出部分滚不到）",
+     ".lb-stage{flex:1;position:relative;overflow:auto;display:flex}" in page
+     and "align-items:center;justify-content:center" not in page),
+    ("居中式样改由子元素 margin:auto 承担", "object-fit:contain;cursor:zoom-in;margin:auto" in page),
     ("上限保证 1:1 够得到", "function maxZ()" in page and "nw/fitW+1" in page),
     ("顶栏有倍率显示", 'id="lb-zoom"' in page and "zoomLabel()" in page),
     ("切图/关闭时重置并取消动画",
