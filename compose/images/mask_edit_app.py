@@ -1940,26 +1940,56 @@ GALLERY_PROCESS_CAP = 120          # 只有"过程"封顶：成果与局部一�
 
 CATEGORIES = (("all", "全部"), ("deliver", "成果"), ("detail", "局部"), ("process", "过程"))
 CAT_LABEL = {"deliver": "成果", "detail": "局部", "process": "过程"}
-DETAIL_DIRS = {"lab", "checks"}
-DETAIL_HINTS = ("redmark", "_zoom_", "_sheet", "contact", "palette", "_crop")
+# 见下方注释：规则经"逐条打印三类清单 + 看图"审计后修订过两处
+DETAIL_DIRS = {"lab"}                      # 局部改图实验件（round_*/lab）
+DETAIL_HINTS = ("redmark", "_zoom")         # 涂红预览、局部放大对照
+DETAIL_SUFFIX = ("zoom",)                 # …_zoom.png 这类以 zoom 结尾的也算
+                                          # （审计抓出："_zoom_" 匹配不到名字末尾的 zoom）
+DETAIL_MASKISH = ("mask_preview", "mask_guide", "line_mask")
+# ⚠ 别用宽泛的 "mask_"/"mask." 子串：那会把 _sent_mask.png（投喂件）、
+# _cmp_B_no_mask.png（无遮罩对照组）、_ab_A_visual_mask_2nd_ref.png（A/B 实验件）
+# 一起算成"局部素材"。只在**以 mask 开头**或命中上面三个复合词时才算蒙版素材。
 DELIVER_DIRS = {"out", "out2", "final", "final2", "deliver"}
+# "成果"桶里的非成品：原图/对照/预览/检查 —— 审计时发现它们曾被算成成果
+# 旧管线 compose/ 没有交付清单，只能按"成品名"判：以下名字是图层/原图/对照/检查，不算成果。
+# 依据：deliver/02_background_only.png、final/result_bg.png、out2/01_bg_only.png
+# 三者字节数完全相同（340,810 B）——同一个背景层被复用，属图层而非成品。
+DELIVER_DENY = ("original", "background_only", "bg_only", "bg", "mask", "preview",
+                "side_by_side", "compare", "check", "tech")
+ROUND_ROOT_DENY = {"round_lib"}            # round_lib 以 "round_" 开头，但不是轮次目录
 
 
 def gallery_category(rel: str) -> str:
-    """按路径特征分到 成果 / 局部 / 过程（顺序即优先级）。"""
+    """按路径特征分到 成果 / 局部 / 过程。
+
+    顺序即优先级：**先判"局部"**（特征更具体），再判"成果"，其余为"过程"。
+    规则经 2026-09-22 审计修订：① 排除 round_lib 被误当轮次目录；
+    ② 成果桶剔除 original / preview / side_by_side / compare / check / mask 这类非成品。
+    """
     import os
 
     name = os.path.basename(rel).lower()
     segs = [s.lower() for s in rel.replace("\\", "/").split("/")]
     dirs = segs[:-1]
-    in_detail = bool(set(dirs) & DETAIL_DIRS)
-    if (name.startswith("out_") and "work" not in dirs and not in_detail
-            and any(d.startswith("round_") for d in dirs)):
-        return "deliver"
-    if set(dirs) & DELIVER_DIRS:
-        return "deliver"
-    if in_detail or any(h in name for h in DETAIL_HINTS):
+
+    # ---- 局部：局部改图实验件、涂红预览、局部放大对照、蒙版素材
+    if set(dirs) & DETAIL_DIRS:
         return "detail"
+    if (any(h in name for h in DETAIL_HINTS)
+            or name.rsplit(".", 1)[0].endswith(DETAIL_SUFFIX)):
+        return "detail"
+    if name.startswith(("mask",)) or any(h in name for h in DETAIL_MASKISH):
+        return "detail"
+
+    # ---- 成果：轮次根层的 out_*，或旧管线的 out/final/deliver 成品
+    if name.startswith("out_"):
+        round_dirs = [d for d in dirs if d.startswith("round_")]
+        if (any(d not in ROUND_ROOT_DENY for d in round_dirs)
+                and not (set(dirs) & {"work", "lab", "input", "checks"})):
+            return "deliver"
+    if set(dirs) & DELIVER_DIRS and not any(k in name for k in DELIVER_DENY):
+        return "deliver"
+
     return "process"
 
 
