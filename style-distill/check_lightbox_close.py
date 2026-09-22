@@ -11,8 +11,9 @@ page = urllib.request.urlopen("http://127.0.0.1:8000/gallery", timeout=30).read(
 checks = [
     ("点空白关闭：含 lb-stage 判断", 't.id==="lb-stage"' in page),
     ("仍是点 #lb 本体也关闭", "t===lb" in page),
-    ("点图片仍是缩放（走同一套缓动，切到真正的 1:1）",
-     'lbImg.addEventListener("click",()=>{anchor=null;zoomTo(zfTarget>1.001?1:oneToOne(),null);})' in page),
+    ("点图片仍是缩放（带拖过抑制，切到真正的 1:1）",
+     'lbImg.addEventListener("click",()=>{if(dragMoved)return;' in page
+     and "zoomTo(zfTarget>1.001?1:oneToOne(),null);})" in page),
     ("两侧箭头仍是翻图", 'document.getElementById("lb-next").addEventListener("click",()=>show(at+1))' in page
      and 'document.getElementById("lb-prev").addEventListener("click",()=>show(at-1))' in page),
     ("Esc 仍可关闭", 'if(e.key==="Escape")close_();' in page),
@@ -34,6 +35,18 @@ checks = [
     ("图片加载后量一次 fitW", "lbImg.onload=()=>{captureFit();}" in page and "fitW=lbImg.clientWidth;" in page),
     ("倍率按原图像素显示（100% = 1:1）", "Math.round(zf*fitW/nw*100)" in page),
     ("点图切到真正的 1:1（nw/fitW）", "zoomTo(zfTarget>1.001?1:oneToOne(),null)" in page),
+    # ---- 放大后可拖动平移
+    ("指针事件拖动平移（pointerdown/move/up）",
+     'lbImg.addEventListener("pointerdown"' in page and 'lbImg.addEventListener("pointermove"' in page
+     and "function endDrag(e)" in page),
+    ("拖动时改的是舞台滚动位置", "stage.scrollLeft=dragSL-dx;stage.scrollTop=dragST-dy;" in page),
+    ("只在放大状态可拖（适应窗口时忽略）", "if(lb.hidden||zf<=1.001)return;" in page),
+    ("用 setPointerCapture（拖出图片范围不断线）", "setPointerCapture(e.pointerId)" in page
+     and "releasePointerCapture(e.pointerId)" in page),
+    ("拖过之后抑制误触的'切 1:1'", "if(dragMoved)return;" in page and "setTimeout(()=>{dragMoved=false;},0);" in page),
+    ("光标 grab/grabbing + 触屏 touch-action", "cursor:grab;touch-action:none" in page
+     and "#lb-img.dragging{cursor:grabbing}" in page),
+    ("禁掉原生图片拖拽", 'lbImg.addEventListener("dragstart",e=>e.preventDefault());' in page),
     ("上限保证 1:1 够得到", "function maxZ()" in page and "nw/fitW+1" in page),
     ("顶栏有倍率显示", 'id="lb-zoom"' in page and "zoomLabel()" in page),
     ("切图/关闭时重置并取消动画",
