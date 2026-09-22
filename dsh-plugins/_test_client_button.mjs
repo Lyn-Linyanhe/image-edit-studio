@@ -79,20 +79,25 @@ function loadClient(react, jsxRuntime) {
   return { mod: exportsObj, sandbox }
 }
 
-/** Mount the footer component and return { tree, click }. */
-function mount(mod, react) {
-  let Component = null
+/** Mount every registered footer component; default target is the 改图 entry. */
+function mount(mod, react, wantedId) {
+  const comps = new Map()
   const ctx = {
     slots: {
       inject: (name, cb) => cb(),
-      register: (meta, comp) => { Component = comp; return () => {} },
+      register: (meta, comp) => { comps.set((meta && meta.id) || '', comp); return () => {} },
     },
   }
   mod.apply(ctx)
-  if (!Component) throw new Error('component was not registered')
+  if (comps.size === 0) throw new Error('component was not registered')
+  const id = wantedId || 'image-edit'
+  const Component = comps.get(id)
+  if (typeof Component !== 'function') {
+    throw new Error('component not registered: ' + id + ' (have: ' + [...comps.keys()].join(', ') + ')')
+  }
   const render = () => { react.__reset(); return Component({ wide: true }) }
   const tree = render()
-  return { tree, render, click: tree.props.onClick }
+  return { tree, render, click: tree.props.onClick, comps }
 }
 
 function labelOf(tree) {
@@ -101,18 +106,18 @@ function labelOf(tree) {
 }
 
 // ------------------------------------------------------- scenario harness
-async function scenario(name, fetchImpl, assertions) {
+async function scenario(name, fetchImpl, assertions, componentId) {
   const react = makeReact()
   const { mod, sandbox } = loadClient(react, makeJsx())
   sandbox.fetch = fetchImpl
-  const { tree, render, click } = mount(mod, react)
+  const { tree, render, click, comps } = mount(mod, react, componentId)
   sandbox.__opened.length = 0
 
   await click({ preventDefault() {} })
   await new Promise((r) => setTimeout(r, 20))
 
   console.log(`\n=== ${name} ===`)
-  assertions({ opened: sandbox.__opened, tree: render(), fetchCalls: sandbox.__fetchCalls || [] })
+  assertions({ opened: sandbox.__opened, tree: render(), fetchCalls: sandbox.__fetchCalls || [], comps })
 }
 
 const jsonRes = (obj, status = 200) => ({
@@ -160,6 +165,38 @@ await scenario('4. non-JSON answer (SPA fallback) -> falls back to opening DEFAU
       'treated a non-JSON body as "route absent"', JSON.stringify(opened))
     check(labelOf(tree) === '改图', 'no error state', String(labelOf(tree)))
   })
+
+console.log('\n' + '='.repeat(56))
+console.log('=== 5. 图片按钮：ensure ok -> 打开 /gallery ===')
+await scenario('5. 图片 button -> opens <url>/gallery', async () =>
+  jsonRes({ ok: true, running: true, started: false, url: 'http://127.0.0.1:8000', pid: 1234 }),
+  ({ opened, tree, comps }) => {
+    check(opened.length === 1, 'opened exactly one tab', JSON.stringify(opened))
+    check(opened[0] && opened[0][0] === 'http://127.0.0.1:8000/gallery',
+      'opened the gallery page', JSON.stringify(opened[0]))
+    check(labelOf(tree) === '图片', 'label is 图片', String(labelOf(tree)))
+    check(String(tree.props.title).includes('/gallery'), 'title mentions /gallery',
+      String(tree.props.title).split('\n')[0])
+    check(comps.has('image-edit') && comps.has('image-gallery'),
+      'BOTH entries registered with distinct ids', [...comps.keys()].join(', '))
+  }, 'image-gallery')
+
+console.log('\n=== 6. 图片按钮：route 不存在时回退到默认地址 ===')
+await scenario('6. 图片 button, route absent -> falls back to DEFAULT_URL/gallery',
+  async () => { throw new TypeError('Failed to fetch') },
+  ({ opened, tree }) => {
+    check(opened.length === 1 && opened[0][0] === 'http://127.0.0.1:8000/gallery',
+      'fell back to the hard-coded url + /gallery', JSON.stringify(opened))
+    check(labelOf(tree) === '图片', 'no error state for an absent route', String(labelOf(tree)))
+  }, 'image-gallery')
+
+console.log('\n=== 7. 图片按钮：服务起不来时不打开死页面 ===')
+await scenario('7. 图片 button, ensure says start FAILED -> no tab, error shown',
+  async () => jsonRes({ ok: false, running: false, message: '找不到启动所需的文件：python: X' }, 503),
+  ({ opened, tree }) => {
+    check(opened.length === 0, 'did NOT open a guaranteed-dead page', JSON.stringify(opened))
+    check(/启动失败/.test(String(labelOf(tree))), 'label shows the failure', String(labelOf(tree)))
+  }, 'image-gallery')
 
 console.log('\n' + '='.repeat(56))
 console.log('FAILED: ' + FAILS.length + (FAILS.length ? '  ' + JSON.stringify(FAILS) : ' (all passed)'))
