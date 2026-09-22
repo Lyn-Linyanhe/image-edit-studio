@@ -14,6 +14,7 @@ Usage:
 """
 import argparse
 import json
+import os                     # 模块级也要：画廊的"用户输入索引"在模块级拼路径（曾在函数内 import，导致 NameError）
 import ssl
 import sys
 import urllib.error
@@ -1938,10 +1939,10 @@ GALLERY_REL_BASE = r"C:\Users\typ\Desktop\mantu"
 GALLERY_SCAN_LIMIT = 3000          # 扫描上限（纯安全阀）
 GALLERY_PROCESS_CAP = 120          # 只有"过程"封顶：成果与局部一张不落
 
-CATEGORIES = (("all", "全部"), ("deliver", "成果"), ("candidate", "候选"), ("reference", "参考"),
-              ("detail", "局部"), ("compare", "对照"), ("process", "过程"))
-CAT_LABEL = {"deliver": "成果", "candidate": "候选", "reference": "参考", "detail": "局部",
-             "compare": "对照", "process": "过程"}
+CATEGORIES = (("all", "全部"), ("deliver", "成果"), ("candidate", "候选"), ("input", "输入"),
+              ("reference", "参考"), ("detail", "局部"), ("compare", "对照"), ("process", "过程"))
+CAT_LABEL = {"deliver": "成果", "candidate": "候选", "input": "输入", "reference": "参考",
+             "detail": "局部", "compare": "对照", "process": "过程"}
 # 规则经 2026-09-22 两次审计修订（看图 + 逐条清单 + 断言），详见 fix_gallery_categories*.py
 DETAIL_DIRS = {"lab"}                      # 局部改图实验件（round_*/lab）
 DETAIL_HINTS = ("redmark", "_zoom")         # 涂红预览、局部放大对照
@@ -1964,6 +1965,34 @@ DELIVER_DENY = ("original", "background_only", "bg_only", "bg", "mask", "preview
                 "side_by_side", "compare", "check", "tech")
 ROUND_ROOT_DENY = {"round_lib"}            # round_lib 以 "round_" 开头，但不是轮次目录
 PROCESS_DIRS = {"_probe"}                 # 我的草稿区（审阅拼版等）→ 一律过程
+
+ATTACHMENTS_DIR = os.path.join(os.path.expanduser("~"), ".dsh", "attachments")
+USER_INPUT_INDEX = os.path.join(GALLERY_REL_BASE, "style-distill", "round_lib", "user_inputs.json")
+_USER_INPUTS: dict = {}
+
+
+def user_inputs() -> dict:
+    """读"用户上传图"索引：{paths: set(工作区内相对路径, 小写), attachments: [ {id,name,…} ]}。
+
+    索引由 style-distill/build_user_inputs_index.py 生成：它从会话日志取 role=user 的图片附件，
+    再与工作区图片做 sha256 配对——所以这是**证据**，不是命名约定。
+    """
+    import json
+
+    if _USER_INPUTS:
+        return _USER_INPUTS
+    paths, atts = set(), []
+    try:
+        with open(USER_INPUT_INDEX, encoding="utf-8") as f:
+            d = json.load(f)
+        paths = {str(x).lower() for x in (d.get("paths") or [])}
+        atts = list(d.get("attachments") or [])
+    except (OSError, ValueError):
+        pass
+    _USER_INPUTS["paths"] = paths
+    _USER_INPUTS["atts"] = atts
+    return _USER_INPUTS
+
 
 _ACCEPTED_CACHE: dict[str, set] = {}
 
@@ -2006,6 +2035,10 @@ def gallery_category(rel: str) -> str:
     # ---- 我自己的测试残留/草稿区：一律过程（要排在"对照/局部"之前）
     if name.startswith(SCRATCH_HINTS) or (set(dirs) & PROCESS_DIRS):
         return "process"
+
+    # ---- 输入：用户自己上传的图（按 sha256 与会话记录配对）
+    if rel.replace("\\", "/").lower() in user_inputs()["paths"]:
+        return "input"
 
     # ---- 参考图：参考目录、名字明示、input 里的 B/D 约定
     in_input = "input" in dirs
@@ -2071,7 +2104,11 @@ def _gallery_scan():
 
 
 def gallery_select():
-    """成果与局部全取；过程只取最新 GALLERY_PROCESS_CAP 张。"""
+    """成果与局部全取；过程只取最新 GALLERY_PROCESS_CAP 张。
+
+    另外把"只存在附件库、未复制进工作区"的用户上传也作为条目列出来
+    （full = "att:<sha256>"，由 /gallery/img 直接从附件库服务）。
+    """
     rows = _gallery_scan()
     kept, process_seen = [], 0
     for row in rows:
@@ -2080,11 +2117,37 @@ def gallery_select():
             if process_seen > GALLERY_PROCESS_CAP:
                 continue
         kept.append(row)
+    for a in user_inputs()["atts"]:
+        oid = str(a.get("id") or "")
+        if not oid:
+            continue
+        p = os.path.join(ATTACHMENTS_DIR, "v1", "objects", oid[:2], oid[2:])
+        try:
+            st = os.stat(p)
+        except OSError:
+            continue
+        kept.append({"mtime": st.st_mtime, "size": st.st_size,
+                     "full": "att:" + oid, "cat": "input",
+                     "rel": "你的上传（未进仓库）/" + str(a.get("name") or oid[:12])})
+
     counts = {key: 0 for key, _ in CATEGORIES}
     counts["all"] = len(kept)
     for row in kept:
         counts[row["cat"]] = counts.get(row["cat"], 0) + 1
     return kept, counts
+
+
+def _input_note() -> str:
+    """页头补一句"还有多少张上传没进仓库"——那些无法在画廊里定位，如实说明而不是假装有卡片。
+
+    原因（实测）：附件元数据里的 attachmentId 与附件库里的对象文件名**不是同一个哈希**
+    （对象是规范化后的副本，ID 是原文件的哈希），所以按 ID 拼不出对象路径。
+    """
+    try:
+        n = len(user_inputs()["atts"])
+    except Exception:                                            # noqa: BLE001
+        n = 0
+    return f" · 另有 {n} 张你上传的图未复制进仓库（只在附件库里，无法在此定位）" if n else ""
 
 
 def gallery_html() -> str:
@@ -2145,7 +2208,7 @@ def gallery_html() -> str:
         '.chip{justify-self:start;font-size:11px;padding:1px 6px;border-radius:10px;border:1px solid}'
         '.c-deliver{color:#8fe388;border-color:#2f5d33}'
         '.c-detail{color:#ffd27f;border-color:#5d4a2f}'
-        '.c-process{color:#9fb4cc;border-color:#33445d}.c-candidate{color:#ffb4e6;border-color:#5d3350}.c-compare{color:#9adbd3;border-color:#2f4f4c}.c-reference{color:#c9b6ff;border-color:#443a63}'
+        '.c-process{color:#9fb4cc;border-color:#33445d}.c-candidate{color:#ffb4e6;border-color:#5d3350}.c-compare{color:#9adbd3;border-color:#2f4f4c}.c-reference{color:#c9b6ff;border-color:#443a63}.c-input{color:#ffd6a5;border-color:#5d4626}'
         '.meta{color:#98a2b3;font-size:11.5px}'
         '.path{color:#7d8794;font-size:11px;word-break:break-all}'
         'button{margin-top:6px;background:#22262d;border:1px solid #333a44;color:#cfd6df;border-radius:5px;'
@@ -2175,7 +2238,8 @@ def gallery_html() -> str:
         f'<div class="tabs">{tabs}</div>'
         '<input id="q" placeholder="按文件名 / 路径筛选（如 v2、round_arcade）">'
         f'<span class="hint" id="hint">共 {counts["all"]} 张；'
-        f'成果与局部一张不落，过程只取最新 {GALLERY_PROCESS_CAP} 张 · 点图页内预览，←/→ 翻图</span>'
+        f'成果与局部一张不落，过程只取最新 {GALLERY_PROCESS_CAP} 张 · 点图页内预览，←/→ 翻图'
+        f'{_input_note()}</span>'
         '</header><main id="grid">'
     )
 
@@ -2288,6 +2352,21 @@ class Handler(BaseHTTPRequestHandler):
     def _gallery_image(self, wanted: str):
         """服务白名单根目录内的图片文件（防目录穿越：解析后必须落在根内）。"""
         import os
+
+        if (wanted or "").startswith("att:"):
+            oid = wanted[4:]
+            meta = next((a for a in user_inputs()["atts"] if str(a.get("id")) == oid), None)
+            if meta is None:
+                return self._send(404, b"not found", "text/plain; charset=utf-8")
+            p = os.path.join(ATTACHMENTS_DIR, "v1", "objects", oid[:2], oid[2:])
+            if not os.path.isfile(p):
+                return self._send(404, b"not found", "text/plain; charset=utf-8")
+            ctype = meta.get("mediaType") or "image/png"
+            try:
+                with open(p, "rb") as f:
+                    return self._send(200, f.read(), ctype)
+            except OSError as e:
+                return self._send(500, str(e).encode("utf-8"), "text/plain; charset=utf-8")
 
         p = os.path.abspath(wanted or "")
         allowed = False
