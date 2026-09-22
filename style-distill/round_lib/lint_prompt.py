@@ -31,7 +31,10 @@ FRAMING = ["取景", "景别", "半身", "全身", "特写", "大头", "镜头"]
 IDENTITY = ["锁死", "保留", "身份"]
 MONO_AUTH = ["黑白", "去色", "无彩色", "单色"]
 KEEP_COLOR = ["保留颜色", "不剔除颜色", "保留配色"]
-NEUTRAL_GUARD = ["不要任何色相", "中性灰"]
+# 守卫措辞有变体（prompt_cn 写的是「不要出现任何色相」）——精确短语匹配会误报，
+# 故按「组件」匹配：命中 ≥2 个组件才算有中性灰守卫。口径由真实样本校准得出。
+NEUTRAL_GUARD = ["不要任何色相", "不要出现任何色相", "不要暖黄", "不要偏褐",
+                 "不要偏蓝", "不要彩色", "中性灰"]
 EXCLUSIVE_PAIRS = [
     ("外框", ["外框", "框线"]),
     ("字幕", ["字幕", "对白", "文字"]),
@@ -66,8 +69,8 @@ def lint(p: Path, lib: set[str]) -> list[tuple[str, str, str]]:
     if mono and not keep:
         bad = [w for w in ("monochrome conversion", "full greyscale") if w in t]
         guard = [k for k in NEUTRAL_GUARD if k in t]
-        res.append(("L3 色彩守卫一致性", "PASS" if (not bad and guard) else "FAIL",
-                    f"声明黑白；互斥词残留 {bad}；中性灰守卫 {guard}"))
+        res.append(("L3 色彩守卫一致性", "PASS" if (not bad and len(guard) >= 2) else "FAIL",
+                    f"声明黑白；互斥词残留 {bad}（应空）；中性灰守卫组件 {guard}（需 ≥2 个）"))
     elif keep:
         # 「不要去色」在"声明保留颜色"时**是正确的负向**，不能算冲突（第一版把它当冲突 → 误报 3 个文件）。
         bad = [k for k in ("不要任何色相", "不要彩色") if k in t]
