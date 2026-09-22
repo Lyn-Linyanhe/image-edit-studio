@@ -2336,7 +2336,11 @@ def gallery_html() -> str:
         'navigator.clipboard.writeText(lbCopy.dataset.copy||"").then(()=>{'
         'lbCopy.textContent="已复制";setTimeout(()=>lbCopy.textContent="复制路径",1200);})'
         '.catch(()=>window.prompt("复制这条路径：",lbCopy.dataset.copy||""));});'
-        'lb.addEventListener("click",e=>{if(e.target===lb)close_();});'
+        # 点"空白处"关闭：图周围那片空白命中的是 .lb-stage（撑满剩余空间的容器），
+        # 不只是 #lb 本体——早先只判 e.target===lb，所以在图旁点空白关不掉。
+        # 点图片本身仍是缩放、点两侧箭头仍是翻图（它们的 target 是 img/button，不会走到这里）。
+        'lb.addEventListener("click",e=>{const t=e.target;'
+        'if(t===lb||(t&&t.id==="lb-stage"))close_();});'
         'document.addEventListener("keydown",e=>{if(lb.hidden)return;'
         'if(e.key==="Escape")close_();'
         'else if(e.key==="ArrowRight"){e.preventDefault();show(at+1);}'
