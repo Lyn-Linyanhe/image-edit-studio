@@ -25,7 +25,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = Path(".").resolve()
 RL = ROOT / "style-distill" / "round_lib"
@@ -178,6 +178,8 @@ def main() -> int:
         s = str(p)
         if any(x in s for x in ("node_modules", "npm-cache", "_backup", ".git")):
             continue
+        if "__pycache__" in s or s.endswith(".pyc"):
+            continue      # 字节码缓存里带着本脚本自己的源码（含检索词）→ 是构建产物，不算残留
         if p.name == "acceptance.py":
             continue      # 检查脚本自己的检索词不算残留（第一版把自己的关键词误报成残留）
         if p.stat().st_size > 3 * 1024 * 1024:
@@ -224,6 +226,30 @@ def main() -> int:
                 "--size", "1024x1024", "--dry-run"])
         check("C7 --dry-run 不发送、不产出文件", ("预算报表" in r.stdout) and (not out.exists()),
               "打印了报表且未产出文件 ✓" if ("预算报表" in r.stdout and not out.exists()) else "异常")
+
+    # 蒙版路径：体积硬门禁（D1）与涂红图落盘（D2）——2026-09-22 验收新增
+    # 蒙版要发两张全尺寸图且不走压缩梯子，实测 1536×1024 = 2.15 MiB → HTTP 400。
+    # 这里用随机噪声内容做确定性的超限样本（噪声 PNG 必然远超 1.96 MiB）。
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+        rnd = np.random.default_rng(0).integers(0, 256, (711, 1067, 3), dtype=np.uint8)
+        cpath = tdp / "content.png"
+        Image.fromarray(rnd).save(cpath)
+        mk = Image.new("L", (1067, 711), 0)
+        ImageDraw.Draw(mk).ellipse((370, 200, 490, 296), fill=255)
+        mpath = tdp / "mask.png"
+        mk.save(mpath)
+        out = tdp / "should_not_send.png"
+        r = sh([sys.executable, str(RL / "run_round.py"), "--content", str(cpath),
+                "--prompt", str(RM / "prompt_threeview_v15.txt"), "--out", str(out),
+                "--size", "1536x1024", "--mask", str(mpath)])
+        refused = "已拒绝发送" in r.stdout
+        never_sent = "HTTP" not in r.stdout and not out.exists()
+        dumped = list(tdp.glob("*.redmark.png"))
+        check("C8 蒙版超限被拒发（未发送）", refused and never_sent and r.returncode != 0,
+              f"returncode={r.returncode}；拒绝提示={refused}；未发出请求={never_sent}")
+        check("C9 蒙版涂红图发送前落盘", bool(dumped),
+              f"落盘 {[p.name for p in dumped]}" if dumped else "未落盘（发送前无法确认涂红位置）")
 
     # ---------- 汇总 ----------
     n = len(RESULTS)
