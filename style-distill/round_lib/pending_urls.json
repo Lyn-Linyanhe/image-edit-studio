@@ -100,5 +100,29 @@
     "url": "https://v4-gateway-v1.shyfai.cn/v1/images/assets/c12ac517-3086-49b9-8499-75cc05bd5f34",
     "status": "done",
     "ts": "2026-09-22 12:09:27"
+  },
+  {
+    "out": "style-distill\\round_arcade\\out_v2_r1_v1prompt_faceref.png",
+    "url": "https://api.mikoto.vip/generated/9ffceb2f4ed64ee5b25c21ffa66ebb9c.png",
+    "status": "done",
+    "ts": "2026-09-22 14:54:02"
+  },
+  {
+    "out": "style-distill\\round_arcade\\out_v2_r2_idanchor.png",
+    "url": "https://api.mikoto.vip/generated/6671977d742ac703ffc5c764232cdb10.png",
+    "status": "done",
+    "ts": "2026-09-22 14:55:33"
+  },
+  {
+    "out": "style-distill\\round_arcade\\out_v2_r3_idanchor.png",
+    "url": "https://api.mikoto.vip/generated/f6214357a960ec8594b72a3b4e985936.png",
+    "status": "done",
+    "ts": "2026-09-22 14:56:48"
+  },
+  {
+    "out": "style-distill\\round_arcade\\out_v2_r4_wink.png",
+    "url": "https://api.mikoto.vip/generated/8a731016a2b6de3ba0f08268ec7d9ff1.png",
+    "status": "done",
+    "ts": "2026-09-22 14:58:09"
   }
 ]
