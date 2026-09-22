@@ -278,6 +278,31 @@ def build_with_mask(content: Image.Image, mask_path: Path, tw: int, th: int, pad
     return files, float(pad_paint.mean()) * 100
 
 
+def build_jpg(content: Image.Image, refs: list[Image.Image], tw: int, th: int,
+              pad: str, quality: int = 90) -> dict:
+    """把所有投喂图归一化到目标尺寸后改用 **JPEG** 编码。
+
+    2026-09-22 实测（1024×1536，两张高细节彩图）：
+      PNG：内容 1.54 + 参考 1.26 = **2.80 MiB**（超 1.96 上限，只能走压缩梯子的低质档）
+      JPEG q88：内容 0.31 + 参考 0.24 = **0.56 MiB** —— 差约 5 倍。
+    原因是 PNG 无损，而投喂前会先把图 **放大** 到目标尺寸（放大破坏量化/调色板结构，
+    所以"先本地量化降熵"实测几乎无效：2.80 → 2.73 MiB）。
+    好处不只是过闸：**不必再把身份参考压成 448px+模糊+128色**（那正是"脸不像"的根源）。
+    """
+    from mask_edit_app import normalise_to_size      # noqa: WPS433
+
+    def enc(im: Image.Image) -> bytes:
+        b = io.BytesIO()
+        normalise_to_size(im.convert("RGB"), tw, th, pad).save(
+            b, "JPEG", quality=quality, optimize=True)
+        return b.getvalue()
+
+    files = {"image": ("image.jpg", enc(content), "image/jpeg")}
+    for i, r in enumerate(refs, start=1):
+        files[f"image[{i}]"] = (f"ref{i}.jpg", enc(r), "image/jpeg")
+    return files
+
+
 def _fmt_sec(sec: float) -> str:
     return f"{sec:.0f} 秒" if sec < 90 else f"{sec/60:.1f} 分钟"
 
@@ -348,7 +373,8 @@ def report_budget(tw: int, th: int, total: int, note: str) -> None:
 def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
             tw: int, th: int, pad: str, quality: str, budget: int, check_target: str | None,
             mask_p: Path | None = None, model: str = "", dry_run: bool = False, ask: bool = False,
-            mask_invert: bool = False, mask_primary: bool = False) -> int:
+            mask_invert: bool = False, mask_primary: bool = False,
+            encode: str = "png", jpg_quality: int = 90) -> int:
     content = Image.open(content_p).convert("RGB")
     refs = [Image.open(p).convert("RGB") for p in refs_p]
     prompt = prompt_p.read_text(encoding="utf-8").strip()
@@ -427,9 +453,15 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
                       "note": f"{total/1048576:.2f} MiB > {LIMIT_OK_MIB} MiB"})
             return 1
     else:
-        c2, r2, note = pick_reduction(content, refs, tw, th, pad, budget)
-        print(f"  压缩策略: {note}", flush=True)
-        files, _fit = G.build_whole(c2, tw, th, pad, style=r2)
+        if encode == "jpg":
+            # JPEG 通道：不经压缩梯子（不需要——同尺寸下体积小一个数量级）
+            files = build_jpg(content, refs, tw, th, pad, jpg_quality)
+            note = f"JPEG q{jpg_quality}（不走压缩梯子）"
+            print(f"  压缩策略: {note}", flush=True)
+        else:
+            c2, r2, note = pick_reduction(content, refs, tw, th, pad, budget)
+            print(f"  压缩策略: {note}", flush=True)
+            files, _fit = G.build_whole(c2, tw, th, pad, style=r2)
         total = sum(len(v[1]) for v in files.values())
         print(f"  发送 {total} B = {total/1048576:.2f} MiB  files={list(files)}", flush=True)
 
@@ -453,7 +485,7 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
                 "model": fields["model"], "prompt": str(prompt_p),
                 "prompt_sha1": hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:12],
                 "content": str(content_p), "n_refs": len(refs_p), "bytes": total,
-                "fields": list(files),
+                "fields": list(files), "encode": encode,
                 "mask": str(mask_p) if mask_p else None,
                 "mask_invert": mask_invert if mask_p else None,
                 "coverage_pct": round(cov, 2) if mask_p else None}
@@ -515,6 +547,11 @@ def main() -> int:
     ap.add_argument("--mask-invert", action="store_true",
                     help="反向遮罩：蒙版里涂过的区域**被保留**，其余整张可改。"
                          "适合「保住脸/身份不动、只重画服装或姿态或背景」；只改一小块请用正向")
+    ap.add_argument("--encode", choices=["png", "jpg"], default="png",
+                    help="投喂编码：png（默认）或 jpg。**jpg 实测同尺寸下体积小约 5 倍**"
+                         "（1024×1536 两张高细节图：PNG 2.80 MiB → JPEG 0.56 MiB），"
+                         "因此不必再走低质压缩档；代价是屏幕类高频内容会有 JPEG 压缩痕迹")
+    ap.add_argument("--jpg-quality", type=int, default=90, help="--encode jpg 的质量，默认 90")
     ap.add_argument("--mask-primary", action="store_true",
                     help="**正向局部改图要用它**：把涂红的视觉蒙版当主图发送（不发干净原图）。"
                          "实测要点：不发干净原图，模型才无法「照抄原图恢复」，才会真的重画那块；"
@@ -545,7 +582,8 @@ def main() -> int:
             print(f"===== {p.name} -> {o.name} =====", flush=True)
             rc |= run_one(c, r, p, o, tw, th, a.pad, a.quality, budget, a.check_target or None,
                           mask_p=mask_p, model=a.model, dry_run=a.dry_run, ask=a.ask,
-                          mask_invert=a.mask_invert, mask_primary=a.mask_primary)
+                          mask_invert=a.mask_invert, mask_primary=a.mask_primary,
+                          encode=a.encode, jpg_quality=a.jpg_quality)
         return rc
 
     print(f"并行发送 {len(jobs)} 个方案（并发 {a.concurrency}）", flush=True)
@@ -555,7 +593,7 @@ def main() -> int:
             print(f"  -> {p.name} => {o.name}", flush=True)
             futs.append(ex.submit(run_one, c, r, p, o, tw, th, a.pad, a.quality, budget,
                                   a.check_target or None, mask_p, a.model, a.dry_run, a.ask,
-                                  a.mask_invert, a.mask_primary))
+                                  a.mask_invert, a.mask_primary, a.encode, a.jpg_quality))
         return max(f.result() for f in futs)
 
 

@@ -82,5 +82,23 @@
     "url": "https://api.mikoto.vip/generated/29082ce4ae303db9ad9ffa09ddfb6761.png",
     "status": "done",
     "ts": "2026-09-22 11:45:06"
+  },
+  {
+    "out": "style-distill\\round_arcade\\out_v1_r1.png",
+    "url": "https://v4-gateway-v2.shagentai.com/v1/images/assets/94f11015-e744-4fa3-9e7c-1398c390c7d2",
+    "status": "done",
+    "ts": "2026-09-22 12:05:52"
+  },
+  {
+    "out": "style-distill\\round_arcade\\out_v1_r2.png",
+    "url": "https://api.mikoto.vip/generated/1a02cd51aa4b958de89564acc5dc7011.png",
+    "status": "done",
+    "ts": "2026-09-22 12:08:26"
+  },
+  {
+    "out": "style-distill\\round_arcade\\out_v1_r3.png",
+    "url": "https://v4-gateway-v1.shyfai.cn/v1/images/assets/c12ac517-3086-49b9-8499-75cc05bd5f34",
+    "status": "done",
+    "ts": "2026-09-22 12:09:27"
   }
 ]
