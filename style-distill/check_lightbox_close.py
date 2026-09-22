@@ -11,8 +11,8 @@ page = urllib.request.urlopen("http://127.0.0.1:8000/gallery", timeout=30).read(
 checks = [
     ("点空白关闭：含 lb-stage 判断", 't.id==="lb-stage"' in page),
     ("仍是点 #lb 本体也关闭", "t===lb" in page),
-    ("点图片仍是缩放（走同一套缓动）",
-     'lbImg.addEventListener("click",()=>{anchor=null;zoomTo(zfTarget>1.001?1:2,null);})' in page),
+    ("点图片仍是缩放（走同一套缓动，切到真正的 1:1）",
+     'lbImg.addEventListener("click",()=>{anchor=null;zoomTo(zfTarget>1.001?1:oneToOne(),null);})' in page),
     ("两侧箭头仍是翻图", 'document.getElementById("lb-next").addEventListener("click",()=>show(at+1))' in page
      and 'document.getElementById("lb-prev").addEventListener("click",()=>show(at-1))' in page),
     ("Esc 仍可关闭", 'if(e.key==="Escape")close_();' in page),
@@ -25,9 +25,16 @@ checks = [
     ("目标倍率与当前倍率分离 + 逐帧缓动", "zfTarget" in page and "requestAnimationFrame(tick)" in page),
     ("缓动收尾（差值小于阈值时精确落位并停止）",
      "Math.abs(zfTarget-zf)<0.002" in page and "zf=zfTarget;paint();rafId=0;return;" in page),
-    ("缩放有上下限（1x–8x）", "Math.max(1,Math.min(8,f))" in page),
+    ("缩放有下限 1x、上限为动态 maxZ()", "Math.max(1,Math.min(maxZ(),f))" in page),
     ("以光标为锚点（逐帧校正滚动位置）",
      "const rx=(stage.scrollLeft+ax)/oldW" in page and "stage.scrollLeft=rx*lbImg.clientWidth-ax" in page),
+    # ---- 缩放基准修正（第一下不该比后面快）
+    ("缩放基准是'适应窗口'尺寸（fitW），不是原图像素",
+     "const base=fitW||lbImg.naturalWidth||oldW;" in page and "(base*zf).toFixed(1)" in page),
+    ("图片加载后量一次 fitW", "lbImg.onload=()=>{captureFit();}" in page and "fitW=lbImg.clientWidth;" in page),
+    ("倍率按原图像素显示（100% = 1:1）", "Math.round(zf*fitW/nw*100)" in page),
+    ("点图切到真正的 1:1（nw/fitW）", "zoomTo(zfTarget>1.001?1:oneToOne(),null)" in page),
+    ("上限保证 1:1 够得到", "function maxZ()" in page and "nw/fitW+1" in page),
     ("顶栏有倍率显示", 'id="lb-zoom"' in page and "zoomLabel()" in page),
     ("切图/关闭时重置并取消动画",
      "resetZoom();" in page and "cancelAnimationFrame(rafId)" in page),
