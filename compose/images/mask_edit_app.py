@@ -1938,55 +1938,88 @@ GALLERY_REL_BASE = r"C:\Users\typ\Desktop\mantu"
 GALLERY_SCAN_LIMIT = 3000          # 扫描上限（纯安全阀）
 GALLERY_PROCESS_CAP = 120          # 只有"过程"封顶：成果与局部一张不落
 
-CATEGORIES = (("all", "全部"), ("deliver", "成果"), ("detail", "局部"), ("process", "过程"))
-CAT_LABEL = {"deliver": "成果", "detail": "局部", "process": "过程"}
-# 见下方注释：规则经"逐条打印三类清单 + 看图"审计后修订过两处
+CATEGORIES = (("all", "全部"), ("deliver", "成果"), ("candidate", "候选"), ("detail", "局部"),
+              ("compare", "对照"), ("process", "过程"))
+CAT_LABEL = {"deliver": "成果", "candidate": "候选", "detail": "局部",
+             "compare": "对照", "process": "过程"}
+# 规则经 2026-09-22 两次审计修订（看图 + 逐条清单 + 断言），详见 fix_gallery_categories*.py
 DETAIL_DIRS = {"lab"}                      # 局部改图实验件（round_*/lab）
 DETAIL_HINTS = ("redmark", "_zoom")         # 涂红预览、局部放大对照
-DETAIL_SUFFIX = ("zoom",)                 # …_zoom.png 这类以 zoom 结尾的也算
-                                          # （审计抓出："_zoom_" 匹配不到名字末尾的 zoom）
+DETAIL_SUFFIX = ("zoom",)                  # …_zoom.png（名字末尾的 zoom）
 DETAIL_MASKISH = ("mask_preview", "mask_guide", "line_mask")
-# ⚠ 别用宽泛的 "mask_"/"mask." 子串：那会把 _sent_mask.png（投喂件）、
-# _cmp_B_no_mask.png（无遮罩对照组）、_ab_A_visual_mask_2nd_ref.png（A/B 实验件）
-# 一起算成"局部素材"。只在**以 mask 开头**或命中上面三个复合词时才算蒙版素材。
+# 对照：输出 vs 参考的对照条、诊断拼版
+COMPARE_DIRS = {"checks", "diag"}
+COMPARE_HINTS = ("compare", "side_by_side", "_vs_", "_cmp", "check", "grid",
+                 "_sheet", "contact", "_ab_")
+SCRATCH_HINTS = ("_smoke", "_dry", "_budget", "_ok_test", "_ledger")   # 我自己的测试残留 → 过程
 DELIVER_DIRS = {"out", "out2", "final", "final2", "deliver"}
-# "成果"桶里的非成品：原图/对照/预览/检查 —— 审计时发现它们曾被算成成果
-# 旧管线 compose/ 没有交付清单，只能按"成品名"判：以下名字是图层/原图/对照/检查，不算成果。
-# 依据：deliver/02_background_only.png、final/result_bg.png、out2/01_bg_only.png
-# 三者字节数完全相同（340,810 B）——同一个背景层被复用，属图层而非成品。
+# 旧管线 compose/ 没有交付清单，只能按"成品名"判：以下名字是图层/原图/对照/检查，不算成果
 DELIVER_DENY = ("original", "background_only", "bg_only", "bg", "mask", "preview",
                 "side_by_side", "compare", "check", "tech")
 ROUND_ROOT_DENY = {"round_lib"}            # round_lib 以 "round_" 开头，但不是轮次目录
+PROCESS_DIRS = {"_probe"}                 # 我的草稿区（审阅拼版等）→ 一律过程
+
+_ACCEPTED_CACHE: dict[str, set] = {}
+
+
+def _accepted_names(round_abs: str) -> set:
+    """读该轮 README 里带 ✓ 的交付件名（README 是"已认可"的权威来源）。"""
+    import os
+    import re
+
+    if round_abs in _ACCEPTED_CACHE:
+        return _ACCEPTED_CACHE[round_abs]
+    found: set = set()
+    p = os.path.join(round_abs, "README.md")
+    try:
+        with open(p, encoding="utf-8") as f:
+            for line in f:
+                if "✓" not in line:
+                    continue
+                found.update(re.findall(r"[A-Za-z0-9_\-]+\.(?:png|jpg|jpeg|webp|gif)", line))
+    except OSError:
+        found = set()
+    # ⚠ 统一转小写再比：调用方传进来的 name 是小写的，而 README 里写的是 out_v12B.png（大写 B）
+    _ACCEPTED_CACHE[round_abs] = {n.lower() for n in found}
+    return _ACCEPTED_CACHE[round_abs]
 
 
 def gallery_category(rel: str) -> str:
-    """按路径特征分到 成果 / 局部 / 过程。
+    """按路径特征分到 成果 / 候选 / 局部 / 对照 / 过程。
 
-    顺序即优先级：**先判"局部"**（特征更具体），再判"成果"，其余为"过程"。
-    规则经 2026-09-22 审计修订：① 排除 round_lib 被误当轮次目录；
-    ② 成果桶剔除 original / preview / side_by_side / compare / check / mask 这类非成品。
+    优先级：局部（特征最具体） → 对照 → 成果/候选（看 README 有无 ✓） → 过程。
+    测试残留（_smoke/_dry/…）先落"过程"，免得混进"对照"或"局部"。
     """
     import os
 
     name = os.path.basename(rel).lower()
     segs = [s.lower() for s in rel.replace("\\", "/").split("/")]
     dirs = segs[:-1]
+    stem = name.rsplit(".", 1)[0]
+
+    # ---- 我自己的测试残留/草稿区：一律过程（要排在"对照/局部"之前）
+    if name.startswith(SCRATCH_HINTS) or (set(dirs) & PROCESS_DIRS):
+        return "process"
 
     # ---- 局部：局部改图实验件、涂红预览、局部放大对照、蒙版素材
     if set(dirs) & DETAIL_DIRS:
         return "detail"
-    if (any(h in name for h in DETAIL_HINTS)
-            or name.rsplit(".", 1)[0].endswith(DETAIL_SUFFIX)):
-        return "detail"
-    if name.startswith(("mask",)) or any(h in name for h in DETAIL_MASKISH):
+    if (any(h in name for h in DETAIL_HINTS) or stem.endswith(DETAIL_SUFFIX)
+            or name.startswith(("mask",)) or any(h in name for h in DETAIL_MASKISH)):
         return "detail"
 
-    # ---- 成果：轮次根层的 out_*，或旧管线的 out/final/deliver 成品
+    # ---- 对照：对照条与诊断拼版
+    if set(dirs) & COMPARE_DIRS or any(h in name for h in COMPARE_HINTS):
+        return "compare"
+
+    # ---- 成果 / 候选：轮次根层的 out_*，按该轮 README 有无 ✓ 区分
     if name.startswith("out_"):
-        round_dirs = [d for d in dirs if d.startswith("round_")]
-        if (any(d not in ROUND_ROOT_DENY for d in round_dirs)
-                and not (set(dirs) & {"work", "lab", "input", "checks"})):
-            return "deliver"
+        round_dirs = [d for d in dirs if d.startswith("round_") and d not in ROUND_ROOT_DENY]
+        if round_dirs and not (set(dirs) & {"work", "lab", "input", "checks"}):
+            # 注意：要拼**完整相对目录**（含 style-distill 那一层），
+            # 早先只拼了轮次目录名，README 永远读不到 → 成果全被误判成候选。
+            round_abs = os.path.join(GALLERY_REL_BASE, *dirs)
+            return "deliver" if name in _accepted_names(round_abs) else "candidate"
     if set(dirs) & DELIVER_DIRS and not any(k in name for k in DELIVER_DENY):
         return "deliver"
 
@@ -2099,7 +2132,7 @@ def gallery_html() -> str:
         '.chip{justify-self:start;font-size:11px;padding:1px 6px;border-radius:10px;border:1px solid}'
         '.c-deliver{color:#8fe388;border-color:#2f5d33}'
         '.c-detail{color:#ffd27f;border-color:#5d4a2f}'
-        '.c-process{color:#9fb4cc;border-color:#33445d}'
+        '.c-process{color:#9fb4cc;border-color:#33445d}.c-candidate{color:#ffb4e6;border-color:#5d3350}.c-compare{color:#9adbd3;border-color:#2f4f4c}'
         '.meta{color:#98a2b3;font-size:11.5px}'
         '.path{color:#7d8794;font-size:11px;word-break:break-all}'
         'button{margin-top:6px;background:#22262d;border:1px solid #333a44;color:#cfd6df;border-radius:5px;'

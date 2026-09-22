@@ -29,24 +29,26 @@ spec = importlib.util.spec_from_file_location("mea", ROOT / "compose/images/mask
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 rows, counts = mod.gallery_select()
-print(f"\n  页签计数：全部={counts['all']}  成果={counts['deliver']}  局部={counts['detail']}  过程={counts['process']}")
+print("  六类计数：" + "  ".join(f"{mod.CAT_LABEL.get(k, k)}={v}" for k, v in counts.items() if k != "all")
+      + f"   全部={counts['all']}")
 
-by = {"deliver": [], "detail": [], "process": []}
+by = {k: [] for k, _ in mod.CATEGORIES if k != "all"}
 for r in rows:
-    by[r["cat"]].append(r["rel"])
+    by.setdefault(r["cat"], []).append(r["rel"])
 
-for cat, label in (("deliver", "成果"), ("detail", "局部")):
+for cat in ("deliver", "candidate", "detail", "compare"):
+    label = mod.CAT_LABEL.get(cat, cat)
     print(f"\n  == {label} {len(by[cat])} 张 ==")
     for rel in sorted(by[cat]):
         print(f"     {rel}")
 
-print(f"\n  == 过程 {len(by['process'])} 张（只列前 12 与目录分布）==")
-for rel in sorted(by["process"])[:12]:
+print(f"\n  == 过程 {len(by['process'])} 张（只列前 10 与目录分布）==")
+for rel in sorted(by["process"])[:10]:
     print(f"     {rel}")
 from collections import Counter                                     # noqa: E402
 dirs = Counter("/".join(r.split("/")[:-1]) for r in by["process"])
 print("     目录分布：")
-for d, n in dirs.most_common(12):
+for d, n in dirs.most_common(10):
     print(f"       {n:4d}  {d}")
 
 # 3) 导出成果桶的拼版图（用分类器的结果，不是我手写清单）
