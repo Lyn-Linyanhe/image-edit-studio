@@ -36,7 +36,7 @@ by = {k: [] for k, _ in mod.CATEGORIES if k != "all"}
 for r in rows:
     by.setdefault(r["cat"], []).append(r["rel"])
 
-for cat in ("deliver", "candidate", "detail", "compare"):
+for cat in ("deliver", "candidate", "reference", "detail", "compare"):
     label = mod.CAT_LABEL.get(cat, cat)
     print(f"\n  == {label} {len(by[cat])} 张 ==")
     for rel in sorted(by[cat]):

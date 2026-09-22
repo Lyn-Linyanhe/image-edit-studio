@@ -1938,9 +1938,9 @@ GALLERY_REL_BASE = r"C:\Users\typ\Desktop\mantu"
 GALLERY_SCAN_LIMIT = 3000          # 扫描上限（纯安全阀）
 GALLERY_PROCESS_CAP = 120          # 只有"过程"封顶：成果与局部一张不落
 
-CATEGORIES = (("all", "全部"), ("deliver", "成果"), ("candidate", "候选"), ("detail", "局部"),
-              ("compare", "对照"), ("process", "过程"))
-CAT_LABEL = {"deliver": "成果", "candidate": "候选", "detail": "局部",
+CATEGORIES = (("all", "全部"), ("deliver", "成果"), ("candidate", "候选"), ("reference", "参考"),
+              ("detail", "局部"), ("compare", "对照"), ("process", "过程"))
+CAT_LABEL = {"deliver": "成果", "candidate": "候选", "reference": "参考", "detail": "局部",
              "compare": "对照", "process": "过程"}
 # 规则经 2026-09-22 两次审计修订（看图 + 逐条清单 + 断言），详见 fix_gallery_categories*.py
 DETAIL_DIRS = {"lab"}                      # 局部改图实验件（round_*/lab）
@@ -1952,6 +1952,12 @@ COMPARE_DIRS = {"checks", "diag"}
 COMPARE_HINTS = ("compare", "side_by_side", "_vs_", "_cmp", "check", "grid",
                  "_sheet", "contact", "_ab_")
 SCRATCH_HINTS = ("_smoke", "_dry", "_budget", "_ok_test", "_ledger")   # 我自己的测试残留 → 过程
+# 参考图：参考目录 / 名字明示 / 本项目 input 的 A-C 内容、B-D 参考约定
+REFERENCE_DIRS = {"ref_xiami", "references", "refs", "pose_ref", "pose_ref2"}
+REFERENCE_HINTS = ("style_ref", "pose_ref", "pose_style", "identity_ref", "face_ref",
+                   "char_ref", "ref_face", "ref_style")
+REFERENCE_INPUT_PREFIX = ("b_", "d_")    # 角色分配约定：A/C＝内容图，B/D＝参考图
+CONTENT_INPUT_PREFIX = ("a_", "c_")      # 仅用于说明，不参与判定
 DELIVER_DIRS = {"out", "out2", "final", "final2", "deliver"}
 # 旧管线 compose/ 没有交付清单，只能按"成品名"判：以下名字是图层/原图/对照/检查，不算成果
 DELIVER_DENY = ("original", "background_only", "bg_only", "bg", "mask", "preview",
@@ -2000,6 +2006,13 @@ def gallery_category(rel: str) -> str:
     # ---- 我自己的测试残留/草稿区：一律过程（要排在"对照/局部"之前）
     if name.startswith(SCRATCH_HINTS) or (set(dirs) & PROCESS_DIRS):
         return "process"
+
+    # ---- 参考图：参考目录、名字明示、input 里的 B/D 约定
+    in_input = "input" in dirs
+    if (set(dirs) & REFERENCE_DIRS
+            or any(h in name for h in REFERENCE_HINTS)
+            or (in_input and name.startswith(REFERENCE_INPUT_PREFIX))):
+        return "reference"
 
     # ---- 局部：局部改图实验件、涂红预览、局部放大对照、蒙版素材
     if set(dirs) & DETAIL_DIRS:
@@ -2132,7 +2145,7 @@ def gallery_html() -> str:
         '.chip{justify-self:start;font-size:11px;padding:1px 6px;border-radius:10px;border:1px solid}'
         '.c-deliver{color:#8fe388;border-color:#2f5d33}'
         '.c-detail{color:#ffd27f;border-color:#5d4a2f}'
-        '.c-process{color:#9fb4cc;border-color:#33445d}.c-candidate{color:#ffb4e6;border-color:#5d3350}.c-compare{color:#9adbd3;border-color:#2f4f4c}'
+        '.c-process{color:#9fb4cc;border-color:#33445d}.c-candidate{color:#ffb4e6;border-color:#5d3350}.c-compare{color:#9adbd3;border-color:#2f4f4c}.c-reference{color:#c9b6ff;border-color:#443a63}'
         '.meta{color:#98a2b3;font-size:11.5px}'
         '.path{color:#7d8794;font-size:11px;word-break:break-all}'
         'button{margin-top:6px;background:#22262d;border:1px solid #333a44;color:#cfd6df;border-radius:5px;'

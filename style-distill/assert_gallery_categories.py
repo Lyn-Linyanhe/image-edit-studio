@@ -31,6 +31,22 @@ CASES = [
     ("style-distill/round_arcade/out_v1_r1.png", "candidate", "候选表里、无 ✓"),
     ("style-distill/round_arcade/out_v2_r4_wink.png", "candidate", "候选表里、无 ✓"),
     ("style-distill/round_arcade/out_v2_r2_idanchor.png", "candidate", "候选表里、无 ✓"),
+    # ---- 参考图
+    ("style-distill/round_manga/ref_xiami/R1_head.png", "reference", "参考目录 ref_xiami"),
+
+    ("style-distill/target/pose_ref/pose_head.png", "reference", "参考目录 pose_ref"),
+    ("style-distill/target/pose_ref2/p2_torso_full.png", "reference", "参考目录 pose_ref2"),
+    ("compose/style_ref.png", "reference", "名字明示 style_ref"),
+    ("style-distill/round_arcade/input/B_char_style.png", "reference", "input 里 B＝参考图"),
+    ("style-distill/round_arcade/input/D_face_closeup.png", "reference", "input 里 D＝参考图"),
+    ("style-distill/round_manga/input/B_manga.png", "reference", "input 里 B＝参考图"),
+    ("style-distill/round_lib/input/B_char.png", "reference", "input 里 B＝参考图"),
+    ("style-distill/_probe/style_ref.png", "process", "草稿区优先于参考判定"),
+    # ---- 内容图不是参考图（input 里的 A/C 约定）
+    ("style-distill/round_arcade/input/A_pose_env.png", "process", "input 里 A＝内容图"),
+    ("style-distill/round_snow/input/C_snow_169.png", "process", "input 里 C＝内容图"),
+    ("style-distill/round_manga/input/A_char.png", "process", "input 里 A＝内容图"),
+    ("style-distill/round_manga/checks/ref_three_views.png", "compare", "名字带 ref 但属对照件"),
     # ---- 局部
     ("style-distill/round_snow/work/mask_hair.png", "detail", "蒙版素材"),
     ("style-distill/target_t2/mask.png", "detail", "蒙版素材"),
@@ -63,9 +79,9 @@ CASES = [
     ("style-distill/round_snow/work/_sent_mask_big_content.png", "process", "投喂件（内容图）"),
     ("style-distill/round_manga/work/feed_A.png", "process", "投喂输入"),
     ("style-distill/round_manga/work/out_threeview_v9.png", "process", "work 里的迭代产出"),
-    ("style-distill/round_arcade/input/B_char_style.png", "process", "参考输入"),
+    ("style-distill/round_arcade/input/B_char_style.png", "reference", "input 里 B＝参考图（本轮新增页签后改判）"),
     ("compose/charsheet/01.png", "process", "旧管线杂项"),
-    ("style-distill/round_manga/ref_xiami/x1.png", "process", "参考组"),
+    ("style-distill/round_manga/ref_xiami/R1_head.png", "reference", "参考目录 ref_xiami（本轮新增页签后改判）"),
     ("style-distill/_probe/sheet_checks.png", "process", "审阅拼版（草稿区）"),
 ]
 

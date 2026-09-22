@@ -17,6 +17,9 @@ page = urllib.request.urlopen("http://127.0.0.1:8000/gallery", timeout=30).read(
 blocks = re.findall(r"<script>(.*?)</script>", page, re.S)
 print(f"  页内 <script> 块：{len(blocks)} 个，共 {sum(len(b) for b in blocks)} 字")
 
+tabs = re.findall(r'class="tab[^"]*" data-cat="(\w+)">(\S+?)<span class="n">(\d+)</span>', page)
+print(f"  页签 {len(tabs)} 个：" + "  ".join(f"{label}={n}" for _, label, n in tabs))
+
 ok = True
 for i, js in enumerate(blocks, 1):
     with tempfile.TemporaryDirectory() as td:
