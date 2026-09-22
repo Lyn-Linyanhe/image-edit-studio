@@ -1,91 +1,134 @@
 {
+ "cutoff_session": "session-05d8fe01-e83",
  "paths": [
   "style-distill/round_arcade/input/A_pose_env.png",
-  "style-distill/round_arcade/input/B_char_style.png",
-  "style-distill/round_lib/input/A_pose_style.png",
-  "style-distill/round_lib/input/B_char.png",
-  "style-distill/round_lib/out_r7.png",
-  "style-distill/round_manga/input/A_char.png",
-  "style-distill/round_manga/input/B_manga.png",
-  "style-distill/round_manga/input/c1dc05a287896769311f364517a30509_720.jpg",
-  "style-distill/round_manga/ref_xiami/R1_cheer.png",
-  "style-distill/round_manga/ref_xiami/R2_park.png",
-  "style-distill/round_manga/ref_xiami/R3_clean.png",
-  "style-distill/round_snow/input/C_snow.jpg",
-  "style-distill/target_t2/input.png"
+  "style-distill/round_arcade/input/B_char_style.png"
  ],
- "attachments": [
+ "excluded": [
   {
-   "id": "2d1d896e275064b7e0ac620393455b29acfe4850690fd77f596835b987911095",
+   "name": "914e99ecbf456a39e7da89b13538b01a.jpg",
+   "width": "1200",
+   "height": "1200",
+   "bytes": "218525"
+  },
+  {
+   "name": "1789699540113.png",
+   "width": "1200",
+   "height": "1542",
+   "bytes": "1730730"
+  },
+  {
    "name": "image.png",
-   "mediaType": "image/png",
    "width": "1200",
    "height": "1200",
    "bytes": "1211113"
   },
   {
-   "id": "332e2921bd7f6e7ca05a5686bc2b3dce8398bd2f0f298232846b02f2ff4e3e24",
    "name": "image.png",
-   "mediaType": "image/png",
-   "width": "579",
-   "height": "522",
-   "bytes": "345124"
-  },
-  {
-   "id": "3e5030001fe3bfff539c134f9f015cb829e7a58ee25bb5db4a1344193538aedd",
-   "name": "image.png",
-   "mediaType": "image/png",
-   "width": "1024",
-   "height": "1024",
-   "bytes": "1520172"
-  },
-  {
-   "id": "4e7e34a57d2efae603738a498f3284ac535812e5c74dde49751d4f7cdf660370",
-   "name": "image.png",
-   "mediaType": "image/png",
    "width": "1200",
    "height": "1542",
    "bytes": "1673455"
   },
   {
-   "id": "692261034026477dab8d22131bb64edf4cb2684edad9e029cb44c4f67432d886",
    "name": "image.png",
-   "mediaType": "image/png",
-   "width": "1200",
-   "height": "1542",
-   "bytes": "1828813"
-  },
-  {
-   "id": "96a8229283c6540758b1f86c2f6d50ff070402c3119b2f90a830db10585ea2b6",
-   "name": "image.png",
-   "mediaType": "image/png",
    "width": "1200",
    "height": "1542",
    "bytes": "1985460"
   },
   {
-   "id": "9b219cf922aa06b1d83d8db10fdbbaa32e10da3e579ef7ea1b7a3c0e38acc501",
    "name": "image.png",
-   "mediaType": "image/png",
-   "width": "1024",
-   "height": "1024",
-   "bytes": "1480503"
+   "width": "1200",
+   "height": "1542",
+   "bytes": "1828813"
   },
   {
-   "id": "b272397104cd90c319663bd7d9ccc5bd787488a604afb28051523cd219782950",
    "name": "884997cea3065d938b750e1be0c25ae2.png",
-   "mediaType": "image/png",
    "width": "1024",
    "height": "1024",
    "bytes": "1501134"
   },
   {
-   "id": "fa6ed20e2f26674e306a31789c02caaa87107705470466949bd399bbe1cd1b2b",
-   "name": "1789699540113.png",
-   "mediaType": "image/png",
+   "name": "image.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1480503"
+  },
+  {
+   "name": "image.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1520172"
+  },
+  {
+   "name": "image.png",
+   "width": "579",
+   "height": "522",
+   "bytes": "345124"
+  },
+  {
+   "name": "1789699568626.png",
    "width": "1200",
    "height": "1542",
-   "bytes": "1730730"
+   "bytes": "1927395"
+  },
+  {
+   "name": "fef1e70172b92306cc4a8874741b1509.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1456487"
+  },
+  {
+   "name": "out_r7.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1634679"
+  },
+  {
+   "name": "1789224470480.png",
+   "width": "1200",
+   "height": "1348",
+   "bytes": "2046178"
+  },
+  {
+   "name": "1789604902823.png",
+   "width": "1200",
+   "height": "998",
+   "bytes": "940016"
+  },
+  {
+   "name": "image.png",
+   "width": "1596",
+   "height": "1224",
+   "bytes": "2276382"
+  },
+  {
+   "name": "image.png",
+   "width": "1519",
+   "height": "1197",
+   "bytes": "2406937"
+  },
+  {
+   "name": "image.png",
+   "width": "1311",
+   "height": "1230",
+   "bytes": "1982038"
+  },
+  {
+   "name": "c1dc05a287896769311f364517a30509_720.jpg",
+   "width": "1200",
+   "height": "1600",
+   "bytes": "330478"
   }
+ ],
+ "unreachable": [
+  "1789699540113.png",
+  "image.png",
+  "image.png",
+  "image.png",
+  "image.png",
+  "884997cea3065d938b750e1be0c25ae2.png",
+  "image.png",
+  "image.png",
+  "image.png"
  ]
 }

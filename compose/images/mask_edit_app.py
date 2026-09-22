@@ -1981,16 +1981,18 @@ def user_inputs() -> dict:
 
     if _USER_INPUTS:
         return _USER_INPUTS
-    paths, atts = set(), []
+    paths, excluded, unreachable = set(), 0, 0
     try:
         with open(USER_INPUT_INDEX, encoding="utf-8") as f:
             d = json.load(f)
         paths = {str(x).lower() for x in (d.get("paths") or [])}
-        atts = list(d.get("attachments") or [])
+        excluded = len(d.get("excluded") or [])
+        unreachable = len(d.get("unreachable") or [])
     except (OSError, ValueError):
         pass
     _USER_INPUTS["paths"] = paths
-    _USER_INPUTS["atts"] = atts
+    _USER_INPUTS["excluded"] = excluded
+    _USER_INPUTS["unreachable"] = unreachable
     return _USER_INPUTS
 
 
@@ -2117,19 +2119,7 @@ def gallery_select():
             if process_seen > GALLERY_PROCESS_CAP:
                 continue
         kept.append(row)
-    for a in user_inputs()["atts"]:
-        oid = str(a.get("id") or "")
-        if not oid:
-            continue
-        p = os.path.join(ATTACHMENTS_DIR, "v1", "objects", oid[:2], oid[2:])
-        try:
-            st = os.stat(p)
-        except OSError:
-            continue
-        kept.append({"mtime": st.st_mtime, "size": st.st_size,
-                     "full": "att:" + oid, "cat": "input",
-                     "rel": "你的上传（未进仓库）/" + str(a.get("name") or oid[:12])})
-
+    # 注意：按切点排除掉的上传**不再**合成行——它们要么是"之前的"，要么无法在画廊定位。
     counts = {key: 0 for key, _ in CATEGORIES}
     counts["all"] = len(kept)
     for row in kept:
@@ -2143,11 +2133,12 @@ def _input_note() -> str:
     原因（实测）：附件元数据里的 attachmentId 与附件库里的对象文件名**不是同一个哈希**
     （对象是规范化后的副本，ID 是原文件的哈希），所以按 ID 拼不出对象路径。
     """
-    try:
-        n = len(user_inputs()["atts"])
-    except Exception:                                            # noqa: BLE001
-        n = 0
-    return f" · 另有 {n} 张你上传的图未复制进仓库（只在附件库里，无法在此定位）" if n else ""
+    ui = user_inputs()
+    n_ex, n_un = int(ui.get("excluded") or 0), int(ui.get("unreachable") or 0)
+    if not n_ex:
+        return ""
+    return (f" · 「输入」只计入最近一次上传（{len(ui.get('paths') or [])} 张）；"
+            f"更早的 {n_ex} 张按你的要求不计入（其中 {n_un} 张只在附件库、无法在此定位）")
 
 
 def gallery_html() -> str:
