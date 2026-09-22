@@ -182,6 +182,13 @@ def main() -> int:
             continue      # 字节码缓存里带着本脚本自己的源码（含检索词）→ 是构建产物，不算残留
         if p.name == "acceptance.py":
             continue      # 检查脚本自己的检索词不算残留（第一版把自己的关键词误报成残留）
+        rel = str(p.relative_to(ROOT))
+        if "comfy" in rel.lower():
+            comfy.append(f"{rel}（路径名）")
+            continue
+        if p.suffix.lower() == ".md":
+            continue      # **文档里提到这个词不算残留**（本检查与验收报告都会提到它）——
+                          # 残留指代码/配置/资产，不指"有人在文档里写下了这个词"
         if p.stat().st_size > 3 * 1024 * 1024:
             continue
         try:
