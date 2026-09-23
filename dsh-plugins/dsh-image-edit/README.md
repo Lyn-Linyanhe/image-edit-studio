@@ -2,6 +2,7 @@
 
 > **用途：私下交流用**——给同行看这个「改图」挂件是怎么做的、实测到什么、踩过哪些坑。
 > 不是对外发布物（无 LICENSE、未发布 npm）。
+> **范围：只讲 GPT 通道（`gpt-image-2`）**；代码里另有的一条备用通道已弃用，不在本文范围。
 
 给 [DSH](https://www.npmjs.com/package/@deepseek-ai/dsh) 的 Web GUI 加一个侧栏按钮 **「改图」**：
 点开是一个本地网页，**在图上涂抹要改的区域** → 填 Base URL / API Key / 模型 + 提示词 → 调中转站的
@@ -71,13 +72,6 @@
 - `HTTP 502 {"Upstream access forbidden…"}` 是**瞬时上游故障**（不是坏请求，坏请求是 400）：
   **重试即可**，别急着查代码。
 
-### grok（`grok-imagine` / `grok-imagine-edit`）
-- 文生图**只有带 `response_format="b64_json"` 才可用**：默认回的是 `imgen.x.ai` 上的 url，
-  而本网络解析到 `162.125.1.8` 后连接超时 → 图永远下不回来。
-- **图生图不可用**：`/images/edits` 会忽略 `response_format`，于是永远回那个不可达的 url。
-- `grok-imagine-edit` **不接受超过一张参考图**（HTTP 400）。
-- 它按规范**不要发 OpenAI 的 `quality`**，改用 `resolution`（1k/2k）驱动输出尺寸。
-
 ### 体积（本项目实测，跨接口通用）
 - 表单上限约 **1.96 MiB 通过 / 2.12 MiB 起被拒**（`400 form field too large or incomplete`）。
 - 投喂体积由**目标尺寸**决定，与源图分辨率无关（把参考缩到 320px，归一化到 4K 后仍要 1.51 MiB）。
@@ -111,10 +105,10 @@
 |---|---|---|
 | `label` | 下拉里显示的名字 | — |
 | `base` / `key` | 默认 Base URL 与 key | 留空则要求页面上手填 |
-| `t2i_model` / `i2i_model` | 文生图 / 图生图各用哪个模型名 | 有的上游两者不同名（如 `grok-imagine` vs `grok-imagine-edit`） |
+| `t2i_model` / `i2i_model` | 文生图 / 图生图各用哪个模型名 | 两者可以不同名（本预设里是同一个 `gpt-image-2`） |
 | `uses_quality` | 是否发 OpenAI 的 `quality` | 与 `uses_resolution` **二选一**，发错会被上游拒 |
 | `uses_resolution` | 是否发 `resolution`（1k/2k） | 有些上游用它而不是 quality 驱动输出尺寸 |
-| `edits_b64` | `/images/edits` 是否回内联 base64 | 为 false 时必须能下载它回的 url；**若那个 url 在你网络里不可达，图生图就等于不可用**（grok 正是这种） |
+| `edits_b64` | `/images/edits` 是否回内联 base64 | 本预设为 **true**（直接拿 base64，最省事）；若某上游为 false，则必须能下载它回的 url，否则图生图不可用 |
 | `multi_image` | 是否接受多张参考图 | 为 false 时多于一张会 HTTP 400 |
 | `mask` | 是否支持"红标遮罩"玩法 | 为 false 时只能整图重画 |
 | `sizes` | 各档位可选尺寸 | 填上游**真实接受**的尺寸组合 |
