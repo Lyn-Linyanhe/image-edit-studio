@@ -59,7 +59,7 @@
 | G4 HOME 对齐 | `~/.agents/skills/style-distill/scripts/audit_and_check.py`、`~/.dsh/attachments`、会话目录均存在 | **PASS** | `home=/mnt/c/Users/typ`；三项 `true` |
 | G5 I/O | `t_wsl ≤ 1.5 × t_w` 才可承接图片批处理 | **未过（1.95×）** | 见下表 |
 | G6 行尾 | 新增 `.sh` 无 `0x0D`、`bash -n` 通过 | **PASS** | 扫过 3 个 `.sh` 全通过 |
-| G7 回归 | Windows 侧 `acceptance.py` 31/31 | 见 §7 | — |
+| G7 回归 | Windows 侧 `acceptance.py` 31/31 | **PASS** | 提交 `f3509d7` 后实测 **31/31**（C1 扫 697 个文件 0 命中；C5 工作区干净）【实测】 |
 
 ### 3.1 G5 三组计时（样本：`t1`，30 张 / 47 MB；各测 3 次取最好）
 
@@ -128,7 +128,7 @@ Remove-Item -Recurse -Force C:\Users\typ\Desktop\mantu\tools\wsl      # 仓库�
 wsl.exe -d Ubuntu-24.04 -e bash -c 'rm -rf ~/.venvs/mantu ~/.config/mantu ~/io_sample'
 ```
 
-因**未修改任何既有 `.py`**，回退后 Windows 侧行为与建立通道前完全一致；`git` 侧只需 revert 对应提交。
+因**未修改任何既有 `.py`**，回退后 Windows 侧行为与建立通道前完全一致；`git` 侧只需 revert 提交 `f3509d7`。
 
 ## 8. 未验证项（如实标注）
 
