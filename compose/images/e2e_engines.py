@@ -19,8 +19,8 @@ import numpy as np
 from PIL import Image
 
 APP = "http://127.0.0.1:8000"
-GROK_KEY = "sk-4d8246189f69f4f76ec0439a656b089111a4ae63d05f5be0f53d1c56754bdc62"
-GPT_KEY = "sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915"
+GROK_KEY = ""
+GPT_KEY = ""
 BASE = "https://image-direct.geiliapi.com/v1"
 FAILS = []
 

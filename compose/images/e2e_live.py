@@ -71,7 +71,7 @@ def png_bytes(im):
 # 1K tier with a 2:3 portrait matches the source aspect closely
 fields = {
     "base_url": "https://image-direct.geiliapi.com/v1",
-    "api_key": "sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915",
+    "api_key": "",
     "model": "gpt-image-2",
     "prompt": PROMPT,
     "size": "1024x1536",

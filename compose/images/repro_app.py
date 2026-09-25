@@ -14,7 +14,7 @@ from PIL import Image
 
 APP = "http://127.0.0.1:8000"
 BASE = "https://image-direct.geiliapi.com/v1"
-KEY = "sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915"
+KEY = ""
 
 SRC = "C:/Users/typ/Desktop/mantu/compose/base_v1.png"
 src = Image.open(SRC).convert("RGB")

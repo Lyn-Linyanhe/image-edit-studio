@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image
 
 BASE = "https://image-direct.geiliapi.com/v1"
-KEY = "sk-4d8246189f69f4f76ec0439a656b089111a4ae63d05f5be0f53d1c56754bdc62"
+KEY = ""
 PROMPT = "a quiet misty gray-green landscape, soft low contrast light"
 
 

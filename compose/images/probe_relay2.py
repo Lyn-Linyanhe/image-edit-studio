@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 
 BASE = "https://image-direct.geiliapi.com/v1"
-KEY = "sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915"
+KEY = ""
 
 
 def probe(path, method="POST", body=None, ctype="application/json"):

@@ -70,7 +70,7 @@ ENGINES = {
         "label": "GPT Image 2 · 文生图 + 图生图（支持遮罩）",
         "member": "gpt",
         "base": "https://image-direct.geiliapi.com/v1",
-        "key": "sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915",
+        "key": "",
         "t2i_model": "gpt-image-2",
         "i2i_model": "gpt-image-2",
         "uses_quality": True,
@@ -88,7 +88,7 @@ ENGINES = {
         "label": "Grok Imagine · 文生图 + 图生图",
         "member": "grok",
         "base": "https://image-direct.geiliapi.com/v1",
-        "key": "sk-4d8246189f69f4f76ec0439a656b089111a4ae63d05f5be0f53d1c56754bdc62",
+        "key": "",
         "t2i_model": "grok-imagine",
         "i2i_model": "grok-imagine-edit",
         # spec: do NOT send OpenAI `quality` to Grok models
@@ -615,7 +615,7 @@ input[type=range]{flex:1}
       <div class="row"><label>Base URL</label>
         <input type="text" id="baseUrl" value="https://image-direct.geiliapi.com/v1"
                placeholder="https://你的中转站.com/v1"></div>      <div class="row"><label>API Key</label>
-        <input type="password" id="apiKey" value="sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915"
+        <input type="password" id="apiKey" value=""
                placeholder="sk-...">
         <button id="eye" title="显示/隐藏">👁</button></div>
       <div class="row"><label>模型</label>
@@ -625,7 +625,7 @@ input[type=range]{flex:1}
         <button id="test">测试连接</button>
         <button id="listModels">获取模型列表</button>
       </div>
-      <div class="hint">key 已按你的中转站预填。它只保存在浏览器本地（localStorage），
+      <div class="hint">key 需自己填写（本项目不再预置任何密钥）。它只保存在浏览器本地（localStorage），
         由本地服务转发，不会写入磁盘。</div>
     </div>
 
@@ -781,7 +781,7 @@ let savedSize = store.get('mie_size') || '';
 // is different — those are attached to EVERY request as reference images.
 const ENGINE_DEFAULTS = {
   gpt: {
-    key: 'sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915',
+    key: '',
     model: 'gpt-image-2',
     kind: 'quality',
     mask: true,
@@ -791,7 +791,7 @@ const ENGINE_DEFAULTS = {
         + ' 支持多张参考图（最多 4 张图，含内容图与红色标记图）。',
   },
   grok: {
-    key: 'sk-4d8246189f69f4f76ec0439a656b089111a4ae63d05f5be0f53d1c56754bdc62',
+    key: '',
     model: 'grok-imagine',
     kind: 'resolution',
     mask: false,
@@ -1122,7 +1122,7 @@ function refreshSizes() {
 function applyEngine() {
   const eng = currentEngine();
   const d = ENGINE_DEFAULTS[eng] || ENGINE_DEFAULTS.gpt;
-  $('apiKey').value = d.key;
+  if (d.key) $('apiKey').value = d.key;   // 默认 key 已清空：不再覆盖用户手填的值
   if ($('model')) $('model').value = d.model;
   if ($('engineHint')) $('engineHint').textContent = d.hint;
 
@@ -1169,7 +1169,7 @@ const key  = () => $('apiKey').value.trim();
 // ---- persisted settings: HTML defaults win when nothing is saved yet ----
 const DEFAULTS = {
   baseUrl: 'https://image-direct.geiliapi.com/v1',
-  apiKey: 'sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915',
+  apiKey: '',
   model: 'gpt-image-2',
   prompt: '替换背景为无任何可辨认物体的平滑灰绿渐变：低饱和灰绿与灰橄榄色，左亮右暗的柔和明暗过渡，四角略暗，过渡处没有可见分界线。背景干净无纹理：不要纸张颗粒、不要水渍斑点、不要云絮雾状、不要涂抹笔触、不要建筑、墙面、地面、树木或任何地标。',
 };

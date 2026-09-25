@@ -12,8 +12,8 @@ import mask_edit_app as app
 from PIL import Image
 
 BASE = "https://image-direct.geiliapi.com/v1"
-GPT_KEY = "sk-b692df77a0e6dc8920c399e501e30379b5452edf19efc588a51f128aa6f4d915"
-GROK_KEY = "sk-4d8246189f69f4f76ec0439a656b089111a4ae63d05f5be0f53d1c56754bdc62"
+GPT_KEY = ""
+GROK_KEY = ""
 
 src = Image.open("C:/Users/typ/Desktop/mantu/compose/input_red.jpg") \
     .convert("RGB").resize((1024, 1024))
