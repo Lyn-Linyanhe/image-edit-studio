@@ -36,9 +36,9 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mask_edit_app as app
 
-BASE = os.environ.get("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
-KEY = os.environ.get("RELAY_API_KEY", "")
-MODEL = os.environ.get("RELAY_MODEL", "gpt-image-2")
+BASE = app.env_cred("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
+KEY = app.env_cred("RELAY_API_KEY", "")
+MODEL = app.env_cred("RELAY_MODEL", "gpt-image-2")
 SIZES = {
     "low":    ["1024x1536", "1024x1024", "1536x1024"],
     "medium": ["1152x2048", "2048x2048", "2048x1152"],

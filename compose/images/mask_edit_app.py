@@ -32,6 +32,32 @@ except ImportError as e:  # pragma: no cover
 
 MAX_UPLOAD = 120 * 1024 * 1024   # 120 MB per part (base64 inflates ~33%)
 
+
+def env_cred(name: str, default: str = "") -> str:
+    """读凭据：先看进程环境，读不到再回退到**用户级环境变量的注册表值**。
+
+    为什么需要这层回退：进程的环境块是**启动时**从父进程继承并固定的。若 ZCode（或任何终端）
+    在设置环境变量**之前**就已启动，它的子进程永远看不到那个变量——表现为"同一个命令，
+    有的终端里能跑、有的报缺 key"，极难排查。直接读一次注册表就消除这个坑。
+
+    只读 User 作用域（不读 Machine，免得把系统级配置当成本用户的）；非 Windows 或读取失败时
+    安静地返回 default。**密钥依旧不写进任何文件。**
+    """
+    val = os.environ.get(name)
+    if val:
+        return val
+    if os.name == "nt":
+        try:
+            import winreg          # 仅 Windows 有；放函数内，免得影响其它平台
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k:
+                v, _ = winreg.QueryValueEx(k, name)
+                if isinstance(v, str) and v:
+                    return v
+        except Exception:
+            pass
+    return default
+
+
 # --------------------------------------------------------------------------
 # Engine profiles. Everything below was MEASURED against the live relay:
 #
@@ -69,8 +95,8 @@ MAX_UPLOAD = 120 * 1024 * 1024   # 120 MB per part (base64 inflates ~33%)
 # 页面上仍可手填并只存浏览器 localStorage；这里给的是**服务端默认值**——
 # 客户端没传 base_url/api_key 时会回退到它（见 api_edit 里的 `eng["base"]` / `eng["key"]`）。
 # 留空则页面必须手填、服务端会明确报错，不会静默传空串。
-_RELAY_BASE = os.environ.get("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
-_RELAY_KEY = os.environ.get("RELAY_API_KEY", "")
+_RELAY_BASE = env_cred("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
+_RELAY_KEY = env_cred("RELAY_API_KEY", "")
 
 ENGINES = {
     "gpt": {
@@ -2561,8 +2587,18 @@ class Handler(BaseHTTPRequestHandler):
         j = self._read_json()
         base = (j.get("base_url") or "").rstrip("/")
         key = j.get("api_key") or ""
+        # 页面字段可能为空（凭据改由服务端环境变量提供）→ 回退到引擎默认值，
+        # 与 api_edit 同一套口径；两边都空才算真的没配。
+        eng = engine_of(j.get("engine") or "gpt")
+        if not base:
+            base = eng["base"]
+        if not key:
+            key = eng["key"]
         if not base or not key:
-            return self._json({"ok": False, "message": "请先填 Base URL 和 API Key"})
+            return self._json({"ok": False, "message": (
+                "缺少 Base URL 或 API Key。\n"
+                "服务端来源是环境变量：RELAY_API_KEY（必填）、RELAY_BASE_URL（选填）。\n"
+                "设好后需**重启本地服务**才会读到；也可以在页面上手动填。")})
 
         req = urllib.request.Request(base + "/models")
         req.add_header("Authorization", f"Bearer {key}")
@@ -2587,8 +2623,17 @@ class Handler(BaseHTTPRequestHandler):
         j = self._read_json()
         base = (j.get("base_url") or "").rstrip("/")
         key = j.get("api_key") or ""
+        # 同 api_ping：空值回退到引擎默认（来自环境变量），页面不必手填
+        eng = engine_of(j.get("engine") or "gpt")
+        if not base:
+            base = eng["base"]
+        if not key:
+            key = eng["key"]
         if not base or not key:
-            return self._json({"ok": False, "message": "请先填 Base URL 和 API Key"})
+            return self._json({"ok": False, "message": (
+                "缺少 Base URL 或 API Key。\n"
+                "服务端来源是环境变量：RELAY_API_KEY（必填）、RELAY_BASE_URL（选填）。\n"
+                "设好后需**重启本地服务**才会读到；也可以在页面上手动填。")})
         req = urllib.request.Request(base + "/models")
         req.add_header("Authorization", f"Bearer {key}")
         try:
