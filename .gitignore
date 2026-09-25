@@ -68,11 +68,11 @@ style-distill/round_snow/*.png
 style-distill/round_snow/work/
 style-distill/round_snow/input/
 
-# 缓存与备份（_backup 里含已删除内容的原件，不进库以保持仓库中无该内容）
+# 缓存与备份（_backup_* 里是被刻意移出仓库的原件，一律不进库）
 __pycache__/
 *.py[cod]
 *.bak
-style-distill/_backup_comfyui_removal/
+style-distill/_backup_*/
 style-distill/_probe/
 style-distill/target/
 style-distill/target_t2/
