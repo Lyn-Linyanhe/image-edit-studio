@@ -127,6 +127,20 @@ def _run(argv: list[str]) -> int:
     return subprocess.call(argv)
 
 
+def _resolved_key() -> str:
+    """与 gen.py 同一套凭据解析（进程环境 → 用户级注册表回退）。
+
+    不能直接读 os.environ：进程的环境块是启动时固定的，若 ZCode 早于环境变量设置而启动，
+    这里会报"未配置"而 gen.py 却能拿到凭据——出现自相矛盾的假阴性。
+    """
+    try:
+        sys.path.insert(0, str(APP.parent))
+        import gen  # noqa: E402
+        return gen.KEY
+    except Exception:
+        return os.environ.get("RELAY_API_KEY", "")
+
+
 def _gen_sizes() -> dict:
     """从 gen.py 读尺寸白名单——单一事实来源，避免这里再抄一份导致漂移。"""
     sys.path.insert(0, str(APP.parent))
@@ -144,7 +158,7 @@ def cmd_edit(a) -> int:
 
     # ---- 凭据前置检查：先失败，别让用户等完压缩才发现没配 key
     # （--dry-run 不发送，所以不要求凭据——否则连预算报表都出不来）
-    if not a.dry_run and not os.environ.get("RELAY_API_KEY"):
+    if not a.dry_run and not _resolved_key():
         print("✗ 未配置 RELAY_API_KEY —— 在花钱之前先停下。")
         print("  PowerShell:  $env:RELAY_API_KEY = 'sk-...'")
         print("  永久:        [Environment]::SetEnvironmentVariable('RELAY_API_KEY','sk-...','User')")

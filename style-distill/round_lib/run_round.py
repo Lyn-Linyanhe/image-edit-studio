@@ -479,7 +479,18 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
             print("  已取消发送（未调用接口）。", flush=True)
             return 0
 
-    fields = {"model": model or G.MODEL, "prompt": prompt, "n": "1",
+    # 蒙版路径必须自带"红色只是标记"那段说明，否则模型不知道红色是什么含义。
+    # 2026-09-25 实测事故：本脚本此前**从不**前置 SCHEMA_PROMPT（而 gen.py 会），
+    # 于是把"要改成什么"的提示词原样发出去 → 模型看到一块红色，收到一句"改成平滑渐变、
+    # 无任何可辨认物体"，就把**整张图**重画了（实测保护区平均差异 20.7/255、仅 29% 保持原样，
+    # 比可改区动得还多）。而文档 A6 里那两次成功，是因为**提示词是手写的、自己带了那句**，
+    # 不是靠自动前置——这个隐含前提在做成工具时被丢掉了。
+    send_prompt = prompt
+    if mask_p:
+        from mask_edit_app import SCHEMA_PROMPT      # 与 gen.py 同一个来源，避免两处文案漂移
+        send_prompt = SCHEMA_PROMPT + prompt
+
+    fields = {"model": model or G.MODEL, "prompt": send_prompt, "n": "1",
               "size": f"{tw}x{th}", "quality": quality}
     base_rec = {"out": str(out_p), "size": f"{tw}x{th}", "pad": pad, "quality": quality,
                 "model": fields["model"], "prompt": str(prompt_p),
@@ -488,7 +499,9 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
                 "fields": list(files), "encode": encode,
                 "mask": str(mask_p) if mask_p else None,
                 "mask_invert": mask_invert if mask_p else None,
-                "coverage_pct": round(cov, 2) if mask_p else None}
+                "coverage_pct": round(cov, 2) if mask_p else None,
+                # 记明"发送时是否自动前置了遮罩说明"，便于日后回溯提示词到底长什么样
+                "mask_prompt_prepended": bool(mask_p)}
     t0 = time.time()
     st, txt = post_with_retry(fields, files)
     elapsed = time.time() - t0
