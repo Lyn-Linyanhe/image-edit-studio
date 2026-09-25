@@ -29,7 +29,9 @@ for _s in (_sys.stdout, _sys.stderr):
         pass
 
 import argparse
+import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -68,7 +70,11 @@ APP = ROOT / "compose" / "images" / "mask_edit_app.py"
 ROUND = ROOT / "style-distill" / "round_lib" / "run_round.py"
 LOCAL = ROOT / "style-distill" / "round_lib" / "local_ops.py"
 MASKGEN = PKG / "mask_gen.py"
+RELIABILITY = PKG / "reliability.py"
 PY = sys.executable
+
+sys.path.insert(0, str(PKG))
+import reliability as R  # noqa: E402
 
 
 # ---------------------------------------------------------------- 工具
@@ -122,9 +128,19 @@ def _flush() -> None:
             pass
 
 
-def _run(argv: list[str]) -> int:
+def _run(argv: list[str], *, capture: bool = False, cwd: Path | None = None) -> tuple[int, str] | int:
     _flush()
-    return subprocess.call(argv)
+    if not capture:
+        return subprocess.call(argv, cwd=str(cwd) if cwd else None)
+    p = subprocess.Popen(argv, cwd=str(cwd) if cwd else None,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, encoding="utf-8", errors="replace", bufsize=1)
+    chunks: list[str] = []
+    assert p.stdout is not None
+    for line in p.stdout:
+        print(line, end="", flush=True)
+        chunks.append(line)
+    return p.wait(), "".join(chunks)
 
 
 def _resolved_key() -> str:
@@ -148,110 +164,342 @@ def _gen_sizes() -> dict:
     return gen.SIZES
 
 
-# ---------------------------------------------------------------- edit
+# ---------------------------------------------------------------- reliability
 
-def cmd_edit(a) -> int:
-    image = Path(a.image)
+RELIABILITY_STATES = {
+    "created", "preflight_ok", "prepared", "submitted", "retrying",
+    "received", "decoded", "validated", "saved", "failed", "blocked",
+}
+
+
+def _job_dir(job: str) -> Path:
+    d = ROOT / ".zimage" / "jobs" / job
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _write_state(path: Path, state: str, **extra) -> None:
+    if state not in RELIABILITY_STATES:
+        raise ValueError(state)
+    data = {"state": state, "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), **extra}
+    R.write_manifest(path, data)
+
+
+def _read_prompt(a) -> str:
+    prompt = a.prompt
+    if a.prompt_file:
+        prompt = Path(a.prompt_file).read_text(encoding="utf-8").strip()
+    if not prompt:
+        raise SystemExit("必须给 --prompt（或 --prompt-file）")
+    return prompt
+
+
+def _validate_input(image: Path) -> tuple[int, int]:
     if not image.is_file():
         raise SystemExit(f"找不到输入图：{image}")
-    out = Path(a.out)
+    from PIL import Image
+    try:
+        im = Image.open(image); im.load()
+    except Exception as e:
+        raise SystemExit(f"输入图无法完整解码：{image}: {e}")
+    if im.width < 16 or im.height < 16:
+        raise SystemExit(f"输入图尺寸过小：{im.size}")
+    return im.size
 
-    # ---- 凭据前置检查：先失败，别让用户等完压缩才发现没配 key
-    # （--dry-run 不发送，所以不要求凭据——否则连预算报表都出不来）
-    if not a.dry_run and not _resolved_key():
-        print("✗ 未配置 RELAY_API_KEY —— 在花钱之前先停下。")
-        print("  PowerShell:  $env:RELAY_API_KEY = 'sk-...'")
-        print("  永久:        [Environment]::SetEnvironmentVariable('RELAY_API_KEY','sk-...','User')")
-        print("  然后重跑同一命令。凭据只从环境变量读，不写入任何文件。")
-        print("  （只想看预算不发送：加 --dry-run）")
-        return 2
 
-    # ---- 目标尺寸白名单（跨档组合会被上游拒；文档 B5 已实测）
+def _prepare_mask(a, image: Path, dst: Path) -> Path | None:
+    import shutil
+    if a.mask_file:
+        src = Path(a.mask_file)
+        if not src.is_file():
+            raise SystemExit(f"找不到遮罩文件：{src}")
+        shutil.copy2(src, dst)
+        return dst
+    if a.whole:
+        return None
+    if not (a.rect or a.polygon or a.flood or a.grabcut is not None):
+        raise SystemExit(
+            "没有给出要改的区域。请用 --rect/--polygon/--flood/--grabcut，"
+            "或 --whole，或 --mask-file。")
+    argv = [PY, str(MASKGEN), "--image", str(image), "-o", str(dst)]
+    for x in a.rect:
+        argv += ["--rect", x]
+    for x in a.polygon:
+        argv += ["--polygon", x]
+    for x in a.flood:
+        argv += ["--flood", x]
+    if a.grabcut is not None:
+        argv += ["--grabcut", a.grabcut]
+    if a.dilate:
+        argv += ["--dilate", str(a.dilate)]
+    rc = _run(argv)
+    if rc:
+        raise SystemExit(rc)
+    return dst
+
+
+def _mask_summary(source: Path, mask: Path, *, protect: bool) -> tuple[float, list[str]]:
+    from PIL import Image
+    import numpy as np
+    src = Image.open(source); src.load()
+    m = Image.open(mask); m.load()
+    warnings: list[str] = []
+    if m.size != src.size:
+        raise SystemExit(f"遮罩尺寸 {m.size} 与源图 {src.size} 不同；请先对齐，不静默重采样")
+    alpha = np.asarray(m.convert("RGBA").getchannel("A")) > 127
+    ratio = float(alpha.mean())
+    if not ratio:
+        raise SystemExit("遮罩为空：alpha=255 的区域为 0")
+    if ratio < 0.001:
+        warnings.append(f"遮罩面积 {ratio * 100:.3f}% 过小，可能几乎没有可见修改")
+    if ratio > 0.80:
+        warnings.append(f"遮罩面积 {ratio * 100:.1f}% 过大，接近整图重绘")
+    if protect:
+        warnings.append("反向语义：圈中区域保护，圈外整张重建")
+    return ratio, warnings
+
+
+def _estimate_bytes(image: Path, mask: Path | None, refs: list[str], a,
+                    *, mask_primary: bool = False) -> tuple[int | None, float | None]:
+    """本地估算真实请求体，不发送。
+
+    局部路径按实际 image/mask 载荷算；整图路径复用 run_round 的 JPEG/压缩梯子，
+    这样 plan 输出的数字与后面 dry-run 的口径一致。
+    """
+    from PIL import Image
+    sys.path.insert(0, str(ROUND.parent))
+    import run_round as rr
+    src = Image.open(image).convert("RGB")
+    ref_imgs = [Image.open(x).convert("RGB") for x in refs]
+    tw, th = (int(x) for x in a.size.split("x"))
+    if mask:
+        files, coverage = rr.build_with_mask(src, mask, tw, th, a.pad, ref_imgs, invert=a.protect)
+        if mask_primary:
+            total = len(files["image[1]"][1]) + len(files["mask"][1])
+        else:
+            total = sum(len(v[1]) for v in files.values())
+        return total, coverage
+    if getattr(a, "encode", "png") == "jpg":
+        files = rr.build_jpg(src, ref_imgs, tw, th, a.pad, getattr(a, "jpg_quality", 90))
+        return sum(len(v[1]) for v in files.values()), None
+    c2, r2, _note = rr.pick_reduction(src, ref_imgs, tw, th, a.pad,
+                                       int(getattr(a, "budget_mib", 1.55) * 1048576))
+    total = rr.norm_bytes(c2, tw, th, a.pad) + sum(rr.norm_bytes(r, tw, th, a.pad) for r in r2)
+    return total, None
+
+
+def _validate_refs(refs: list[str]) -> list[str]:
+    out = []
+    for ref in refs:
+        p = Path(ref)
+        if not p.is_file():
+            raise SystemExit(f"找不到参考图：{p}")
+        _validate_input(p)
+        out.append(str(p.resolve()))
+    return out
+
+
+def _classify_failure(output: str, rc: int) -> str:
+    low = output.lower()
+    if "moderation" in low or "审核" in output:
+        return "moderation_blocked"
+    if "401" in low or "api key" in low or "apikey" in low:
+        return "auth_error"
+    if "timeout" in low or "timed out" in low:
+        return "timeout"
+    if any(x in low for x in ("502", "503", "504")):
+        return "network_error"
+    if "解码" in output or "truncated" in low or "not an image" in low:
+        return "invalid_image"
+    return "unknown" if rc else "failed"
+
+
+def _plan_data(a, *, persist_mask: Path | None = None) -> tuple[dict, Path | None]:
+    image = Path(a.image).resolve()
+    source_size = _validate_input(image)
+    prompt = _read_prompt(a)
+    a.ref = _validate_refs(a.ref)
     sizes = _gen_sizes()
     if a.size not in sizes.get(a.quality, []):
         raise SystemExit(f"--size {a.size} 不在 {a.quality} 档白名单内：{sizes.get(a.quality)}")
-
-    # ---- 区域 → 遮罩
-    mask_p = None
-    if a.mask_file:
-        mask_p = Path(a.mask_file)
-        if not mask_p.is_file():
-            raise SystemExit(f"找不到遮罩文件：{mask_p}")
-        print(f"  用现成遮罩：{mask_p}")
-    elif a.whole:
-        print("  整图改图模式（不给区域，全图可改）")
+    mask = persist_mask
+    temp_dir = None
+    if persist_mask is not None and (a.mask_file or not a.whole):
+        mask = _prepare_mask(a, image, persist_mask)
+    elif mask is None and (a.mask_file or not a.whole):
+        temp_dir = Path(tempfile.mkdtemp(prefix="zimage-plan-"))
+        mask = _prepare_mask(a, image, temp_dir / "mask.png")
+    if mask:
+        ratio, warnings = _mask_summary(image, mask, protect=a.protect)
     else:
-        if not (a.rect or a.polygon or a.flood or a.grabcut is not None):
-            raise SystemExit(
-                "没有给出要改的区域。三选一：\n"
-                "  · 给区域：--rect x0,y0,x1,y1 / --polygon \"x,y x,y x,y\" / --flood x,y[,tol] / --grabcut\n"
-                "  · 整图改：--whole\n"
-                "  · 手涂遮罩：--mask-file M.png（可用 `zimage.py serve` 打开网页刷）")
-        mask_p = out.with_name(out.stem + "-region.png")
-        argv = [PY, str(MASKGEN), "--image", str(image), "-o", str(mask_p),
-                "--size", a.size, "--pad", a.pad]
-        for s in a.rect:
-            argv += ["--rect", s]
-        for s in a.polygon:
-            argv += ["--polygon", s]
-        for s in a.flood:
-            argv += ["--flood", s]
-        if a.grabcut is not None:
-            argv += ["--grabcut", a.grabcut]
-        if a.dilate:
-            argv += ["--dilate", str(a.dilate)]
-        print("  ── 生成遮罩 ──")
-        rc = _run(argv)
-        if rc != 0:
-            return rc
-        print(f"  遮罩落盘：{mask_p}")
+        ratio, warnings = None, []
+    fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt,
+                               model=a.model or "gpt-image-2", size=a.size,
+                               quality=a.quality, pad=a.pad, mask_invert=a.protect)
+    estimated, coverage = _estimate_bytes(
+        image, mask, a.ref, a, mask_primary=bool(mask and not a.protect and not getattr(a, "no_primary", False))
+    ) if mask else (None, None)
+    if mask and a.protect:
+        warnings.append("反向保护模式不使用 mask-primary：保护语义就是保留圈内原像素")
+    if temp_dir is not None:
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    data = {
+        "job_id": getattr(a, "job_id", "") or R.job_id(),
+        "source": str(image),
+        "source_size": list(source_size),
+        "mask": str(mask) if mask else None,
+        "mask_mode": "protect" if a.protect else ("edit" if mask else "whole"),
+        "mask_ratio": ratio,
+        "coverage_target_ratio": coverage,
+        "model": a.model or "gpt-image-2",
+        "size": a.size,
+        "quality": a.quality,
+        "pad": a.pad,
+        "prompt_sha256": R.sha256_text(R.normalize_prompt(prompt)),
+        "fingerprint": fp,
+        "estimated_request_bytes": estimated,
+        "warnings": warnings,
+        "status": "preflight_ok",
+    }
+    return data, mask
 
-    # ---- 组装并委托 run_round（发送/压缩/重试/下载/校验全在它那里）
-    prompt_txt = a.prompt
-    if a.prompt_file:
-        prompt_txt = Path(a.prompt_file).read_text(encoding="utf-8").strip()
-    if not prompt_txt:
-        raise SystemExit("必须给 --prompt（或 --prompt-file）")
-    pf = out.with_name(out.stem + "-prompt.txt")
-    pf.parent.mkdir(parents=True, exist_ok=True)
-    pf.write_text(prompt_txt, encoding="utf-8")
 
-    argv = [PY, str(ROUND), "--content", str(image), "--prompt", str(pf),
-            "--out", str(out), "--size", a.size, "--quality", a.quality,
-            "--pad", a.pad, "--encode", a.encode]
-    for r in a.ref:
-        argv += ["--ref", r]
-    if mask_p:
-        argv += ["--mask", str(mask_p)]
-        if a.protect:
-            argv += ["--mask-invert"]
-            print("  语义：**反向**——你圈的区域会被保护，其余整张重建（不适合「只改一小块」）")
-        else:
-            print("  语义：**正向**——你圈的区域会被修改，其余像素物理不动")
-            if a.no_primary:
-                print("  --no-primary：保留干净原图一起发。"
-                      "实测这样模型会照抄原图把该块恢复、返回近原图；"
-                      "只在你要「验证保护区逐像素没动」时才用。")
-            else:
+def cmd_plan(a) -> int:
+    """纯本地计划：图片/遮罩/尺寸/指纹/预算，绝不调用上游。"""
+    data, mask = _plan_data(a)
+    print("== zimage plan（本地，不发送）==")
+    print("  job_id     :", data["job_id"])
+    print("  源图       :", data["source"])
+    print("  源图尺寸   :", "x".join(map(str, data["source_size"])))
+    print("  任务       :", data["mask_mode"])
+    print("  目标尺寸   :", data["size"], "质量:", data["quality"], "pad:", data["pad"])
+    print("  模型       :", data["model"])
+    print("  prompt sha  :", data["prompt_sha256"][:16])
+    print("  fingerprint :", data["fingerprint"])
+    print("  请求体估算 :", f"{data['estimated_request_bytes']:,} B" if data["estimated_request_bytes"] else "整图路径由 run_round dry-run 精算")
+    print("  修改面积   :", f"{data['mask_ratio'] * 100:.1f}%" if data["mask_ratio"] is not None else "整图")
+    print("  状态       : preflight_ok（计划可提交；仍需 dry-run 预算）")
+    for w in data["warnings"]:
+        print("  ⚠", w)
+    return 0
+
+
+def cmd_edit(a) -> int:
+    image = Path(a.image).resolve()
+    _validate_input(image)
+    prompt_txt = _read_prompt(a)
+    a.ref = _validate_refs(a.ref)
+    out = Path(a.out).resolve()
+    if out.exists() and not a.force:
+        raise SystemExit(f"输出已存在（加 --force 才覆盖）：{out}")
+    if not a.dry_run and not _resolved_key():
+        print("✗ 未配置 RELAY_API_KEY —— 在花钱之前先停下。")
+        return 2
+
+    job = a.job_id or R.job_id()
+    if not re.match(r"^[A-Za-z0-9_.-]+$", job):
+        raise SystemExit("--job-id 只能包含字母、数字、点、下划线、连字符")
+    jd = _job_dir(job)
+    manifest = jd / "manifest.json"
+    print(f"  job_id  : {job}")
+    print(f"  manifest: {manifest}")
+    _write_state(manifest, "created", job_id=job, source=str(image), status="created")
+    try:
+        mask = _prepare_mask(a, image, jd / "mask.png")
+        ratio, warnings = _mask_summary(image, mask, protect=a.protect) if mask else (None, [])
+        prompt_file = jd / "prompt.txt"
+        R.atomic_write_text(prompt_file, prompt_txt)
+        fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt_txt,
+                                   model=a.model or "gpt-image-2", size=a.size,
+                                   quality=a.quality, pad=a.pad, mask_invert=a.protect)
+        estimated, coverage = _estimate_bytes(
+            image, mask, a.ref, a, mask_primary=bool(mask and not a.protect and not getattr(a, "no_primary", False))
+        ) if mask else (None, None)
+        if mask and a.protect:
+            warnings.append("反向保护模式不使用 mask-primary：保护语义就是保留圈内原像素")
+        R.update_manifest(manifest, job_id=job, state="preflight_ok", status="preflight_ok",
+                          source_sha256=R.sha256_file(image),
+                          mask_sha256=R.sha256_file(mask) if mask else None,
+                          prompt_sha256=R.sha256_text(R.normalize_prompt(prompt_txt)),
+                          model=a.model or "gpt-image-2", size=a.size, quality=a.quality,
+                          pad=a.pad, mask_mode=("protect" if a.protect else ("edit" if mask else "whole")),
+                          mask_ratio=ratio, coverage_target_ratio=coverage,
+                          request_fingerprint=fp, warnings=warnings)
+        R.update_manifest(manifest, state="prepared", status="prepared")
+
+        temp_out = jd / "result.tmp.png"
+        argv = [PY, str(ROUND), "--content", str(image), "--prompt", str(prompt_file),
+                "--out", str(temp_out), "--size", a.size, "--quality", a.quality,
+                "--pad", a.pad, "--encode", a.encode, "--budget-mib", str(a.budget_mib)]
+        for r in a.ref:
+            argv += ["--ref", r]
+        if mask:
+            argv += ["--mask", str(mask)]
+            if a.protect:
+                argv += ["--mask-invert"]
+            elif not a.no_primary:
                 argv += ["--mask-primary"]
-    if a.dry_run:
-        argv += ["--dry-run"]
-    if a.model:
-        argv += ["--model", a.model]
-
-    print("  ── 交给 run_round ──")
-    print("  " + " ".join(argv[1:]).replace(str(ROOT) + "\\", "").replace(str(ROOT) + "/", ""))
-    rc = _run(argv)
-
-    # ---- 结果确认（不靠肉眼：完整解码 + 报尺寸字节）
-    if rc == 0 and out.is_file() and not a.dry_run:
+        if a.dry_run:
+            argv += ["--dry-run"]
+        if a.model:
+            argv += ["--model", a.model]
+        R.update_manifest(manifest, state="submitted", status="submitted",
+                          request_bytes=estimated, attempts=1)
+        rc, log = _run(argv, capture=True)
+        R.atomic_write_text(jd / "process.log", log)
+        retry_lines = [x for x in log.splitlines() if "发送第" in x and "/" in x]
+        if retry_lines:
+            import re as _re
+            nums = [_re.search(r"发送第\s+(\d+)/(\d+)", x) for x in retry_lines]
+            attempts = max((int(m.group(1)) for m in nums if m), default=1)
+            R.update_manifest(manifest, state="retrying", status="retrying", attempts=attempts)
+        if a.dry_run:
+            R.update_manifest(manifest, state="prepared", status="plan_only", dry_run=True)
+            return rc
+        if rc != 0:
+            failure = _classify_failure(log, rc)
+            R.update_manifest(manifest, state="blocked" if failure == "moderation_blocked" else "failed",
+                              status=failure, failure_type=failure)
+            return rc
+        R.update_manifest(manifest, state="received", status="received")
+        if not temp_out.is_file():
+            R.update_manifest(manifest, state="failed", status="invalid_image", failure_type="invalid_image")
+            print("✗ 上游返回成功但没有结果文件")
+            return 3
         from PIL import Image
-        im = Image.open(out); im.load()
-        print(f"\n  ✓ 结果 {out}  {im.size[0]}x{im.size[1]}  {out.stat().st_size / 1024:.0f} KB  完整可解码")
-    elif a.dry_run:
-        print("\n  （--dry-run：只出了预算报表（给了区域时还有遮罩预览），**没有发送**）")
-    return rc
-
+        try:
+            im = Image.open(temp_out); im.load()
+        except Exception as e:
+            R.update_manifest(manifest, state="failed", status="invalid_image", failure_type="invalid_image",
+                              error=str(e))
+            print("✗ 结果图片无法完整解码：", e)
+            return 3
+        R.update_manifest(manifest, state="decoded", status="decoded",
+                          result_size=list(im.size), result_bytes=temp_out.stat().st_size)
+        metrics = None
+        if mask:
+            metrics = R.protection_metrics(image, temp_out, mask,
+                                           requested_size=a.size, pad=a.pad, invert=a.protect)
+            R.update_manifest(manifest, state="validated", status=metrics["status"], validation=metrics)
+            print("结果验收：", json.dumps(metrics, ensure_ascii=False))
+            if metrics["status"] == "FAIL":
+                R.update_manifest(manifest, state="failed", status="protected_area_changed",
+                                  failure_type="protected_area_changed")
+                print("✗ 遮罩验收失败；结果保留在 Job 目录，没有替换最终输出")
+                return 4
+        else:
+            R.update_manifest(manifest, state="validated", status="PASS", validation={"status": "PASS"})
+        R.atomic_replace(temp_out, out, force=a.force)
+        R.update_manifest(manifest, state="saved", status="saved", output=str(out))
+        print(f"✓ 结果原子写入：{out}  {im.size[0]}x{im.size[1]}  {out.stat().st_size / 1024:.0f} KB")
+        return 0
+    except BaseException as e:
+        if isinstance(e, SystemExit):
+            R.update_manifest(manifest, state="failed", status="failed", error=str(e))
+            raise
+        R.update_manifest(manifest, state="failed", status="failed", error=f"{type(e).__name__}: {e}")
+        raise
 
 # ---------------------------------------------------------------- 本地服务
 
@@ -342,7 +590,7 @@ def cmd_doctor(a) -> int:
             print(f"    {m:8s} **缺失** {type(e).__name__}")
 
     print("\n  [凭据]（只看有没有，不打印值）")
-    k = os.environ.get("RELAY_API_KEY", "")
+    k = _resolved_key()
     print(f"    RELAY_API_KEY  : {'已设置（%d 字符）' % len(k) if k else '**未设置** → edit 会直接停下'}")
 
     sys.path.insert(0, str(APP.parent))
@@ -424,8 +672,34 @@ def main() -> int:
     e.add_argument("--pad", default="crop", choices=["pad", "crop"])
     e.add_argument("--encode", default="png", choices=["png", "jpg"])
     e.add_argument("--model", default="")
+    e.add_argument("--budget-mib", type=float, default=1.55)
     e.add_argument("--dry-run", action="store_true", help="只出预算报表与遮罩预览，不发送")
+    e.add_argument("--force", action="store_true", help="允许覆盖已有输出")
+    e.add_argument("--job-id", default="", help="显式指定可复现的 job id")
     e.set_defaults(fn=cmd_edit)
+
+    pl = sub.add_parser("plan", help="只做本地预检与请求计划，不调用上游")
+    pl.add_argument("--image", required=True)
+    pl.add_argument("--prompt", default="")
+    pl.add_argument("--prompt-file", default="")
+    pl.add_argument("--ref", action="append", default=[])
+    pl.add_argument("--rect", action="append", default=[])
+    pl.add_argument("--polygon", action="append", default=[])
+    pl.add_argument("--flood", action="append", default=[])
+    pl.add_argument("--grabcut", nargs="?", const="", default=None)
+    pl.add_argument("--dilate", type=int, default=0)
+    pl.add_argument("--mask-file", default="")
+    pl.add_argument("--protect", action="store_true")
+    pl.add_argument("--whole", action="store_true")
+    pl.add_argument("--size", default="1024x1536")
+    pl.add_argument("--quality", default="low", choices=["low", "medium", "high"])
+    pl.add_argument("--pad", default="crop", choices=["pad", "crop"])
+    pl.add_argument("--encode", default="png", choices=["png", "jpg"])
+    pl.add_argument("--jpg-quality", type=int, default=90)
+    pl.add_argument("--budget-mib", type=float, default=1.55)
+    pl.add_argument("--model", default="")
+    pl.add_argument("--no-primary", action="store_true")
+    pl.set_defaults(fn=cmd_plan)
 
     s = sub.add_parser("serve", help="拉起网页手涂页")
     s.add_argument("--port", type=int, default=8000)

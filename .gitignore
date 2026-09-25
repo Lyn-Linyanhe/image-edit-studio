@@ -82,3 +82,15 @@ style-distill/_encprobe.txt
 style-distill/round_lib/user_inputs_zcode.json
 # ZCode 客户端自己的状态：每会话一份计划文件（plan-<sessionId>.md），不是本项目的交付物
 .zcode/
+# zimage 任务状态、manifest 与临时 Job 目录（不是源码/交付物）
+.zimage/
+# 编辑器本机设置，不进入仓库
+.vscode/
+# Python 字节码缓存
+**/__pycache__/
+*.pyc
+# zimage 运行时 Job 状态/manifest/中间文件（每次任务单独目录，非源码）
+.zimage/
+.vscode/
+# ZCode helper / local test artifacts
+.zcodeignore
