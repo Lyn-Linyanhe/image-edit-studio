@@ -1,0 +1,195 @@
+# 迁移说明 B · 实现原理（改图插件 + 图片画廊）
+
+> 口径标注同文档 A：**【实测】**／【文件核实】／【判断】／【未验证】。
+> **本文档可单独转发**：插件包与本文档**零密钥**（密钥只在运行时于页面手填）；
+> 但代码里的本地服务 `mask_edit_app.py` **含密钥，不要随文档一起发**（见 B7 末尾与 B10）。
+
+## B1. 两个挂件是什么
+
+给 DSH Web GUI 的侧栏加两个按钮：
+
+- **「改图」**：打开本地网页，**在图上涂抹要改的区域** → 填 Base URL / API Key / 模型 + 提示词 →
+  调中转站图生图接口出结果。**点一下才启动本地服务**，不用事先开终端；服务起不来时按钮上直接显示原因。
+- **「图片」**：打开本地**图片画廊**（分类页签 + 页内灯箱预览）。
+
+**为什么要自己做**：聊天客户端与中转站控制台都**不给你画遮罩的地方**，而这套接口的"局部改图"恰恰要靠遮罩。
+
+## B2. 三块架构与调用时序【文件核实】
+
+```
+① 浏览器（DSH Web GUI，同源 http://127.0.0.1:3080）
+     lib/client.js → 往槽位 sidebar.footer.action 注册两个按钮（同槽位 id 必须不同）
+     点击 → fetch 同源路由 POST /dsh-image-edit/ensure
+② 节点半边 lib/index.js（跑在 DSH 宿主进程）
+     3 条路由：POST /ensure（探活+按需拉起）、GET /status、POST /stop
+     拉起：spawn(detached, stdio:'ignore', unref) 启动 Python；pid 落盘 .dsh-image-edit.pid
+③ 本地服务 mask_edit_app.py（独立进程，127.0.0.1:8000）
+     GET  /            改图页（涂抹画布 + 参数面板）
+     POST /api/ping    连通性 + 可用模型数
+     POST /api/models  拉模型列表
+     POST /api/edit    组装并转发到中转站 /images/edits
+     GET  /gallery     图片画廊
+     GET  /gallery/img 图片字节（白名单根目录 + 后缀校验）
+```
+
+文件与行数【实测】：`lib/client.js 243`、`lib/index.js 311`、`package.json 41`、
+`cordis.patch.yml 40`、`README.md 264`、`_test_client_button.mjs 204`、`_test_lazy_start.mjs 156`、
+`compose/images/mask_edit_app.py 2896`。
+
+## B3. 设计取舍（每条都是踩出来的）【文件核实 + 实测】
+
+| 决策 | 原因 |
+|---|---|
+| **懒启动**，不要求先手动开服务 | 常态不需要它；按钮点那一下起最省事。pid 落盘 → DSH 重启后 `/stop` 仍可用 |
+| 用 `spawn(detached)` 而**不是** `ctx.subprocess` | subprocess 这个 seam 会在服务销毁时**连带杀掉**其管理的进程，而本地服务应当比 DSH 活得更久 |
+| 客户端半边**只依赖 `slots`** | `inject` 里 await 不存在的服务会让条目**永远 pending**；且 `apply` 抛异常会**fail 整个 web-shell 启动** |
+| 探活用 `node:http` 而**不是** `fetch` | **实测**：对以 HTTP/1.0 应答的服务 abort 一个 fetch，会在 undici 内部抛**不可捕获**断言（来自 socket 事件处理器）→ **杀掉整个 DSH 宿主进程**（= GUI 挂掉） |
+| 路由挂在 `/api` **之外** | `/api` 前缀被 `dsh-client-connection` 的浏览器信任栅栏独占 |
+| 改 `lib/index.js` **必须重启 `dsh web`** | node 半边只在 boot 时加载；`patchReload: "live"` 只管 patch 文件 |
+| 改 `lib/client.js` 只需刷新页面 | 客户端半边由 `/plugins/<id>/client.js` 提供。**注意：本条未在浏览器里验证过**（见 B9【未验证】） |
+| 本地服务模块级用到的模块**必须在模块级 import** | **实测**：`os` 只在函数内 import 而模块级写 `os.path.join(...)` → 启动即 `NameError`，表现为"按钮点了只报 503"。修复方式是启动自检：`python mask_edit_app.py --port 8011` |
+| 服务是**独立进程**，改它不必重启 DSH | `POST /stop` → `POST /ensure` 即可（curl 两条命令） |
+
+## B4. 遮蔽是怎么做到的（核心发现）【实测 + 文件核实】
+
+1. `/images/edits` 是 multipart，但它的 **`mask` 字段被静默忽略**（发过去 0% 效果）
+2. 真正被认的是：**把"要改的区域"硬涂成纯红，合成进 `image[1]`**，提示词里明确
+   "红色只是标记、只有这一块要改、其余保持原样" → 保护区【实测】**100% 不动**；
+   本项目另一处量到**保护区最大改动 0.0**
+3. 代价：硬涂红把该区域原有信息**整块抹掉**，模型只能靠提示词重建 →
+   适合"这块本来就要清掉重画"（换背景、重画道具），不适合"保留结构、整体加色"
+4. **反直觉补充**：把**干净原图**一起发过去时，模型会照抄它把那块"恢复"，
+   正向改图可能变成"近原图返回"；**只发涂红那张**才会真的重画 →
+   页面上的"作用域 / 遮罩模式"就是在切这两种用法（命令行为 `--mask` 与 `--mask-primary`）
+
+## B5. GPT 通道实测账本【文件核实，来自 `mask_edit_app.py` 头部实测注释】
+
+- 结果以 **b64_json** 返回；**支持多图**（`image + image[1] + image[2]` 三张实测可用）
+- **尺寸不严格**：请求 `1024x1536` 回过 `1029x1528`；`1024x1024` 回过 `1254x1254`
+  → 本项目进一步查到：**`b64` 响应路线不守 `size`（3/3），`url` 路线精确命中**；别做像素级精确假设
+- 账号只暴露**一个**模型（`gpt-image-2`），"获取模型列表"只显示一条是**正常**的
+- `HTTP 502 {"Upstream access forbidden…"}` 是**瞬时上游故障**（坏请求是 400）→ **重试即可**
+- **体积**：表单上限约 **1.96 MiB 通过 / 2.12 MiB 起被拒**；投喂体积由**目标尺寸**决定；
+  **JPEG 投喂比 PNG 小约 5 倍**（2.80 → 0.56 MiB）
+
+## B6. 接入你自己的模型 / 中转站
+
+**上游需要**：OpenAI 兼容 `POST {base}/images/generations`（文生图）与 `POST {base}/images/edits`
+（multipart，**遮罩玩法的基础**；没有它就只能文生图）；认证 `Authorization: Bearer <key>`；
+可选 `GET {base}/models` 用于"测试"与"获取模型列表"（【文件核实】实际发法见 `mask_edit_app.py`）。
+
+**页面上填三样**：Base URL（到 `/v1`）、API Key（**只存浏览器 localStorage**，带注入/清除开关）、
+模型名。"测试"打 `{base}/models` 并回报可用模型数——最快的连通性验证。
+
+**新增"引擎"预设只改一处**（`mask_edit_app.py` 顶部 `ENGINES`）：
+
+| 字段 | 含义 | 影响 |
+|---|---|---|
+| `label` / `base` / `key` | 显示名 / 默认地址 / 默认 key | key 留空则要求页面手填 |
+| `t2i_model` / `i2i_model` | 文生图 / 图生图各用哪个模型名 | 两者可不同名（本预设里同为 `gpt-image-2`） |
+| `uses_quality` | 是否发 OpenAI 的 `quality` | 与 `uses_resolution` **二选一**，发错会被上游拒 |
+| `uses_resolution` | 是否发 `resolution`（1k/2k） | 有些上游用它驱动输出尺寸 |
+| `edits_b64` | `/images/edits` 是否回内联 base64 | 本预设 **true**；为 false 时必须能下载它回的 url |
+| `multi_image` | 是否接受多张参考图 | 为 false 时多于一张会 HTTP 400 |
+| `mask` | 是否支持"红标遮罩"玩法 | 为 false 时只能整图重画 |
+| `sizes` | 各档位可选尺寸 | 填上游**真实接受**的组合 |
+
+新增后**只需重启本地服务**（`/stop` → `/ensure`），不用重启 DSH。
+
+## B7. 「图片」画廊
+
+### B7.1 数据来源与八个分类页签【文件核实】
+
+服务端渲染 HTML（`gallery_html()`），卡片带 `data-cat`。
+**扫描根 = 只扫最新一轮**（`scan_roots()` → `latest_round()`：按目录 mtime 取 `style-distill/round_*`
+中最新者，排除 `round_lib`）→ 落实用户口径："**只从最近这轮开始计入、之前的全部隐藏**"。
+
+判据集中在 `gallery_category()` 一处：
+
+| 页签 | 判据 |
+|---|---|
+| 成果 | 轮次根层 `out_*` **且该轮 README 里带 ✓**；或 `compose` 的 out/final/deliver 里名字不含 original/preview/bg_only/mask/side_by_side/tech… 的成品 |
+| 候选 | 轮次根层 `out_*` 但 README 里**没有 ✓**（"待选"因此与"已认可"自动分开） |
+| 输入 | **用户自己上传的图**（按 sha256 与会话日志配对，见 B7.2） |
+| 参考 | 参考目录（`ref_xiami / pose_ref* / references`）、名字明示（`style_ref / pose_style / identity_ref …`）、`input/` 里 **B/D 前缀**（本项目角色分配约定：A/C＝内容图、B/D＝参考图） |
+| 局部 | `round_*/lab` 局部改图实验件、涂红预览（`*redmark*`）、局部放大对照（`*_zoom*`）、蒙版素材（`mask_*`、`mask_preview`、`line_mask`） |
+| 对照 | `checks/`、`diag/` 目录，或名字含 `compare / _vs_ / _cmp / side_by_side / grid / _sheet / contact / _ab_` |
+| 过程 | 其余（`work/`、`input/` 的 A/C、`target*`、`round_lib`、`compose` 杂项、`_probe` 草稿区） |
+| 全部 | 以上之和；**过程封顶 120 张**（成果/候选/输入/参考/局部/对照不封顶） |
+
+### B7.2 「输入」页签：用证据而不是命名【实测】
+
+- 从**会话日志**（`~/.dsh/sessions/--C-Users-typ-Desktop-mantu--/*/session.jsonl.zstd`，
+  Python 3.14 内置 `compression.zstd`）提取 `role=user` 消息里的图片附件 → 跨 13 个会话共 **21 张**
+- 与工作区图片做 **sha256 配对** → 13 个文件在仓库里；**只出现在最近一次会话**的 = **2 张**
+  （`round_arcade/input/A_pose_env.png`、`B_char_style.png`）→ 这就是「输入」页签内容
+- 索引固化在 `style-distill/round_lib/user_inputs.json`（由 `build_user_inputs_index.py` 生成，可复跑）
+- **坑**：附件元数据的 `attachmentId` 与附件库对象文件名**不是同一个哈希**（对象是规范化后的副本），
+  故那 **9 张"只在附件库"**的上传**无法在画廊里定位** → 不造假卡片，改为页头如实标注数量
+
+### B7.3 分类修正史（用户一句质疑逼出的 4 类真错误）【实测 + 图证】
+
+初版按路径拍脑袋分类；被问"是否仔细甄别"后，用**拼版看图 + 逐条打印清单 + 字节数比对**核对，查出：
+
+1. **`round_lib` 被当成轮次目录** → 7 张测试产出误判为"成果"
+2. **"成果"桶混进非成品**：`03_original.png`（原图）、`04_mask_guide.png`、`05_side_by_side.png`、`mask_preview.png`
+3. **"局部"桶混进 A/B 实验件与投喂件**（只因子串含 "mask"）：`_cmp_B_no_mask.png`、`_sent_mask.png` 等
+4. **"局部"桶混进冒烟残留与 23 张对照拼版**：`_smoke_crop/_smoke_sheet`、`checks/*`
+
+关键旁证：`deliver/02_background_only.png`、`final/result_bg.png`、`out2/01_bg_only.png`
+**三者字节数完全相同（340,810 B）** → 同一个背景层被复用，属**图层**而非成品。
+修正后落成 **64 条回归断言**（`style-distill/assert_gallery_categories.py`）。
+
+### B7.4 灯箱交互与三个前端坑【实测 + 文件核实】
+
+交互：点缩略图页内打开 → **点空白 / 点最外层 / Esc 关闭**、**滚轮以光标为锚点缩放（1×–8×，逐帧缓动）**、
+**放大后按住拖动平移**、`←/→` 在**当前可见集合**内翻图、点图片切"适应窗口 ↔ 真正 1:1"、
+顶栏显示倍率（按原图像素算，100% = 1:1）、切图自动重置。
+
+| # | 坑 | 根因与正解 |
+|---|---|---|
+| 1 | 放大后**拖不到最上/最左** | 容器用 `align-items/justify-content:center`，子元素比容器大时溢出部分被推到滚动起点之外。**正解**：容器只 `display:flex`，**居中交给子元素 `margin:auto`** |
+| 2 | 缩放**第一下特别快**（像跳 1.5 倍） | 基准错用**原图像素**：适应窗口时显示宽度常只有原图 ~68%，`zf 1→1.06` 实为 1.06/0.68≈1.56 倍。**正解**：`onload` 量一次 **`fitW`**，`width = fitW × zf` |
+| 3 | 滚轮缩放**顺带滚页面**、换设备步长差异巨大 | 必须 `{passive:false}` + `preventDefault()`；按位移算 `exp(-Δy×0.0006)` 且**归一化 `deltaMode`**（行×16、页×100） |
+
+**安全**：`/gallery/img` 只服务白名单根目录内的图片后缀（`commonpath` 校验）；
+**实测**三种目录穿越（`win.ini`、`README.md`、`..\..\`）**全部 404**。
+
+## B8. 一张图串起"背后的调用原理"
+
+```
+点「改图」
+ → client.js onClick → fetch POST /dsh-image-edit/ensure（同源，避开 /api 栅栏）
+   → index.js：有 pidfile 则探活（node:http 短请求）；无则 spawn(detached) Python
+     → mask_edit_app.py 起在 127.0.0.1:8000 并写 pid → ensure 等它应答 → 返回 {ok,url,pid}
+ → 浏览器新标签打开 127.0.0.1:8000
+    → 用户涂抹 → 表单 multipart POST /api/edit
+      → 服务端把涂抹区**硬涂红**合成 image[1]，组装 image / image[1] / image[2…]
+        → POST {base}/images/edits（Bearer key）→ 回 b64/url → 页面显示可下载
+
+点「图片」
+ → 同一个 ensure → 打开 /gallery
+    → gallery_html() 只扫**最新一轮** → gallery_category() 打标签 → 服务端渲染卡片
+    → 点图进灯箱（纯前端）；图片字节走 /gallery/img（白名单 + 后缀校验）
+```
+
+## B9. 未决与未验证（工程侧）
+
+- 【未验证】**「图片」按钮是否已在 GUI 里出现**：需刷新页面确认；若未出现，则需重启 `dsh web`
+  才能加载新客户端半边
+- 【未验证】`lib/client.js` 改动"刷新页面即生效"这一条从未在浏览器里验证过
+  （`/plugins` 路由按 pathname+search **精确匹配预建响应表**，猜不到带 rev 的 URL；无授权的 GUI 根页面返回 401）
+- 灯箱交互（滚轮/拖动/点空白）只做过**结构级断言**（`check_lightbox_close.py` 全过 + 页内 JS 过 `node --check`），
+  **手感未在浏览器实测**
+- 画廊 `scan_roots()` / `user_inputs()` 绑死本项目目录与会话约定，**不是通用功能**
+
+## B10. 三次审查记录（针对本文档）
+
+- **审查一（事实）**：所有行数/限值/体积数字都对齐本次命令输出与代码注释；
+  把"客户端刷新即生效"从结论**降级为【未验证】**并写明为什么（响应表精确匹配 + 401）
+- **审查二（可执行）**：补齐三处**必须改的本机路径**（`cordis.patch.yml` 的 `python/serverScript/serverCwd`）
+  与三种**重启时机**（改 index.js 重启 DSH / 改服务只重启服务 / 改 client.js 刷新页面）；
+  给出服务启动自检命令
+- **审查三（安全/一致）**：确认插件包（`lib/`、`cordis.patch.yml`、`package.json`）与本文档**零密钥**；
+  **明确警告** `mask_edit_app.py` 含 6 处硬编码密钥（含一处写进 HTML 的 `<input value="sk-…">`，
+  会随页面发给访问者）→ **该文件不得随文档外发**；术语与文档 A 口径一致、不重复其内容只留指针
