@@ -65,12 +65,19 @@ MAX_UPLOAD = 120 * 1024 * 1024   # 120 MB per part (base64 inflates ~33%)
 #     - the spec says not to send OpenAI `quality`; `resolution` (1k/2k) drives
 #       output size instead.
 # --------------------------------------------------------------------------
+# 凭据只从环境变量读（2026-09-25 起：原先写死在下面的 key 已清除，因为要能安全转发）。
+# 页面上仍可手填并只存浏览器 localStorage；这里给的是**服务端默认值**——
+# 客户端没传 base_url/api_key 时会回退到它（见 api_edit 里的 `eng["base"]` / `eng["key"]`）。
+# 留空则页面必须手填、服务端会明确报错，不会静默传空串。
+_RELAY_BASE = os.environ.get("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
+_RELAY_KEY = os.environ.get("RELAY_API_KEY", "")
+
 ENGINES = {
     "gpt": {
         "label": "GPT Image 2 · 文生图 + 图生图（支持遮罩）",
         "member": "gpt",
-        "base": "https://image-direct.geiliapi.com/v1",
-        "key": "",
+        "base": _RELAY_BASE,
+        "key": _RELAY_KEY,
         "t2i_model": "gpt-image-2",
         "i2i_model": "gpt-image-2",
         "uses_quality": True,
@@ -87,8 +94,8 @@ ENGINES = {
     "grok": {
         "label": "Grok Imagine · 文生图 + 图生图",
         "member": "grok",
-        "base": "https://image-direct.geiliapi.com/v1",
-        "key": "",
+        "base": _RELAY_BASE,
+        "key": _RELAY_KEY,
         "t2i_model": "grok-imagine",
         "i2i_model": "grok-imagine-edit",
         # spec: do NOT send OpenAI `quality` to Grok models
@@ -1967,7 +1974,11 @@ ROUND_ROOT_DENY = {"round_lib"}            # round_lib 以 "round_" 开头，但
 PROCESS_DIRS = {"_probe"}                 # 我的草稿区（审阅拼版等）→ 一律过程
 
 ATTACHMENTS_DIR = os.path.join(os.path.expanduser("~"), ".dsh", "attachments")
-USER_INPUT_INDEX = os.path.join(GALLERY_REL_BASE, "style-distill", "round_lib", "user_inputs.json")
+# 索引路径可用环境变量覆盖：ZCode 侧的 zcode_inputs.py 会生成同 schema 的索引
+# （keys: paths / excluded / unreachable），指过来即可切换数据源，
+# **不需要动 gallery_category 的判定逻辑**（那套 64 条回归断言必须保持通过）。
+USER_INPUT_INDEX = os.environ.get("GALLERY_USER_INPUTS") or os.path.join(
+    GALLERY_REL_BASE, "style-distill", "round_lib", "user_inputs.json")
 _USER_INPUTS: dict = {}
 
 
@@ -2460,7 +2471,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if (wanted or "").startswith("att:"):
             oid = wanted[4:]
-            meta = next((a for a in user_inputs()["atts"] if str(a.get("id")) == oid), None)
+            # 注意：user_inputs() 只提供 paths/excluded/unreachable，从不提供 atts。
+            # 原先直接写 user_inputs()["atts"] 会 **KeyError**（此分支一旦被走到就崩），
+            # 改为 .get 后优雅地返回 404。
+            meta = next((a for a in (user_inputs().get("atts") or []) if str(a.get("id")) == oid), None)
             if meta is None:
                 return self._send(404, b"not found", "text/plain; charset=utf-8")
             p = os.path.join(ATTACHMENTS_DIR, "v1", "objects", oid[:2], oid[2:])

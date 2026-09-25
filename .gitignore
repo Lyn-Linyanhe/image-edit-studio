@@ -78,3 +78,7 @@ style-distill/target/
 style-distill/target_t2/
 style-distill/_b_*.bin
 style-distill/_encprobe.txt
+# ZCode 侧的「输入」索引：由 zcode-image-edit/zcode_inputs.py 按本机存储生成，含机器相关路径
+style-distill/round_lib/user_inputs_zcode.json
+# ZCode 客户端自己的状态：每会话一份计划文件（plan-<sessionId>.md），不是本项目的交付物
+.zcode/

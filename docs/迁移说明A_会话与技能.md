@@ -149,6 +149,11 @@
 **必须带**：整个工作区；技能镜像 `style-distill/_skill/style-distill/`（与已装位哈希一致，可据此重装）；
 环境 Windows + PowerShell 7 + Python 3.14（Pillow/numpy）+ Node v24 + DSH `0.1.2-rc.1`。
 
+> **2026-09-25 补**：改图能力已**移植到 ZCode**（技能 + CLI + 斜杠命令，不依赖 DSH），
+> 见 `zcode-image-edit/` 及其 README、以及文档 B 的 **B12**。凭据改为环境变量
+> `RELAY_API_KEY`（必填）/ `RELAY_BASE_URL` / `RELAY_MODEL`——接手者必须知道这一点，
+> 否则命令行与网页两条路都会因缺 key 而停下。
+
 **注意**：
 
 - 关键证据目录**刻意保留**（如 `style-distill/target/pose_ref*` 是那批丢失源图的唯一记录）
@@ -220,3 +225,19 @@
 要连这些也抹掉，需对全部 blob 做 `--replace-text`，代价是同时抹掉 C1 的检索式与日期记录，**不建议**。
 
 **门禁**：清理提交后 `acceptance.py` **31/31 全部通过**（此前 30/31 的唯一未过项 C5 已随提交解决）。
+
+## A11. 2026-09-25 追加：改图能力移植到 ZCode
+
+一句话：原挂在 DSH 侧栏的「改图 / 图片」已搬进 ZCode，交付为**技能 + CLI + 斜杠命令**，
+凭据走环境变量，遮罩支持"代理生成 + 保留网页手涂"，**运行期不再依赖 DSH**。
+实现细节、复用边界、数据源替换与未验证项全部记在**文档 B 的 B12**，此处只留指针，避免两份文档漂移。
+
+接手者需要知道的三件事：
+
+1. **凭据入口变了**：不再是页面手填（那个仍是选项），命令行与网页都以环境变量为准——
+   `RELAY_API_KEY`（必填）、`RELAY_BASE_URL`、`RELAY_MODEL`。没配时命令会在发请求前停下并给设置方法。
+2. **装了新的技能与命令**：`~/.agents/skills/image-edit/` 与 `~/.agents/commands/{image-edit,paint-mask,image-gallery}.md`，
+   源与镜像在 `zcode-image-edit/`。**装完需重启 ZCode 会话才会被发现**（【判断】，本轮未重启验证）。
+   重装/校验：`python zcode-image-edit\install.py`（会按 ZCode 的静默丢弃规则先校验源文件）。
+3. **本轮只做了确定性验证**，首次真实改图调用**没有跑**（要花额度）——`--dry-run` 已把预算与遮罩
+   都产出，等你决定何时真跑。

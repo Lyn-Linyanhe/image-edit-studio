@@ -3,6 +3,12 @@
 Reuses the app's own payload builders so what we send here is byte-for-byte
 what the UI would send.
 
+凭据只从环境变量读取（2026-09-25 起，原先写死的 key 已清除）：
+    RELAY_API_KEY    必填，没有就明确报错并给出设置方法
+    RELAY_BASE_URL   选填，默认 https://image-direct.geiliapi.com/v1
+    RELAY_MODEL      选填，默认 gpt-image-2
+密钥不写入任何文件、不进仓库。
+
 Usage:
     python gen.py <image> <prompt-file|prompt-text> [--mode whole|mask]
                   [--size 1024x1536] [--quality low] [--pad crop]
@@ -30,9 +36,9 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mask_edit_app as app
 
-BASE = "https://image-direct.geiliapi.com/v1"
-KEY = ""
-MODEL = "gpt-image-2"
+BASE = os.environ.get("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
+KEY = os.environ.get("RELAY_API_KEY", "")
+MODEL = os.environ.get("RELAY_MODEL", "gpt-image-2")
 SIZES = {
     "low":    ["1024x1536", "1024x1024", "1536x1024"],
     "medium": ["1152x2048", "2048x2048", "2048x1152"],
@@ -75,7 +81,25 @@ def build_masked(src, protect, tw, th, pad):
             fit, float(pad_paint.mean()) * 100)
 
 
+def require_config() -> None:
+    """凭据只从环境变量读，任何位置都不落盘。
+
+    **故意抛 SystemExit 而不是返回错误码**：`run_round.post_with_retry` 用
+    `except Exception` 把异常映射成 `-1` 再重试 3 次，而缺少凭据是配置错误、
+    重试毫无意义。SystemExit 继承自 BaseException，不会被那个 except 吞掉，
+    于是能一路冒泡、带着原因直接终止。
+    """
+    if not KEY:
+        raise SystemExit(
+            "未配置 API Key。请先设置环境变量再重跑（密钥只从环境变量读取，不写入任何文件）：\n"
+            "  PowerShell:  $env:RELAY_API_KEY = 'sk-...'\n"
+            "  永久:        [Environment]::SetEnvironmentVariable('RELAY_API_KEY','sk-...','User')\n"
+            "  可选覆盖:    RELAY_BASE_URL（默认 %s）、RELAY_MODEL（默认 %s）" % (
+                "https://image-direct.geiliapi.com/v1", "gpt-image-2"))
+
+
 def call(fields, files, timeout=900):
+    require_config()
     bnd = ("----Gen" + uuid.uuid4().hex).encode()
     body = app.build_multipart(fields, files, bnd)
     req = urllib.request.Request(BASE + "/images/edits", data=body, method="POST")

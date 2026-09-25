@@ -250,3 +250,98 @@ GUI 根页需 DSH 启动时打印的带令牌 URL（401），内置浏览器无�
 
 **仍未验证的只剩宿主侧渲染**：DSH GUI 是否真的把 `sidebar.footer.action` 槽位画出来。
 这一条必须用带令牌的 GUI URL 打开刷新才能确认，**不是插件侧的问题**。
+
+### B11.3 宿主侧槽位的静态确认（2026-09-25 补）
+
+顺着插件源码注释（它写明槽位由 `dsh-client-ui-sidebar` 渲染）追到了宿主包：
+
+- `@deepseek-ai/dsh-client-ui-sidebar` **版本 0.1.2-rc.1，与 DSH 一致**（无版本错配）；
+  其 `slots.d.ts` 声明 `'sidebar.footer.action': { kind: 'list', scope: 'root', … }`
+  —— `kind: 'list'` 意味着**允许多个注册者**，所以放两个按钮合法；
+  `lib/client.js` 里真的 `renderSlot("sidebar.footer.action", { wide })`，位置在
+  `footArea > footerActions`（**侧栏底部**），owner props 恰为插件假设的 `{ wide }`。
+- profile 里另装的 `dsh-better-sidebar` **没有抢这个槽位**——它自己的代码写着
+  "`'sidebar'` 已被 DSH 自己的 ui-sidebar 占用，故另用不同名字"，它插入的是独立的一行、独立槽位名。
+- 一个实用提醒：按钮住在侧栏底部，**侧栏折叠时这块可能看不到**，确认时先展开侧栏。
+
+另有两条与"挂钩是否还活着"直接相关的事实【实测】：
+
+- 插件的 `dsh.profile.bundles` **包含 `dsh-image-edit`**（光有 dependencies 不够，必须进这个清单才会被加载）；
+- `profiles/web/node_modules/dsh-image-edit` 是一个**目录联结（junction）**，`readlink` 指向
+  `\\?\C:\Users\typ\Desktop\mantu\dsh-plugins\dsh-image-edit`，5 个文件逐哈希相同——
+  也就是说**改工作区里的插件文件就是改 DSH 会加载的那份**，不必往 profile 里复制。
+  （注意 `os.path.islink` 对 Windows 联结返回 False，但 `ReparsePoint` 属性为真；
+  只按 `islink` 判断会误判成"不存在"。）
+
+## B12. 2026-09-25 追加：把改图能力搬进 ZCode（不再依赖 DSH）
+
+用户口径：**要在 ZCode 里用这套改图能力，而非继续依靠 DSH**。交付为
+**技能 + CLI + 斜杠命令**，凭据走环境变量，遮罩支持"代理生成 + 保留网页手涂"，
+范围含改图 / 确定性本地操作 / 画廊。全部落在新目录 `zcode-image-edit/`（见其 README）。
+
+### B12.1 复用边界：为什么这是换壳不是重写
+
+【实测】`round_lib/run_round.py` 本身就可独立运行（`--help` 退出码 0），整条链路已具备：
+体积预算 → 压缩梯子/JPEG → 发送（按返回值重试）→ URL 落盘 → 探测式抢档下载 → 完整解码校验。
+遮罩合成的核心函数 `make_visual_mask / build_mask_alpha / normalise_to_size / build_multipart`
+都是可导入的纯函数。因此 ZCode 侧**只补三样 DSH 曾经提供的东西**：
+
+| 原由 DSH 提供 | ZCode 侧替代 |
+|---|---|
+| 鼠标刷子涂遮罩 | `zcode-image-edit/mask_gen.py` 的区域规格（矩形/多边形/漫水/前景分割）；网页手涂用 `zimage.py serve` 保留 |
+| 侧栏按钮 + 懒启动 | `zimage.py serve / gallery / stop`（拉起、复用、按 pid 停） |
+| 页面手填 Key | 环境变量 |
+
+**从 DSH 侧剔除、ZCode 不需要的**：`sidebar.footer.action` 槽位注册、`ensure/status/stop` 三条路由、
+`spawn(detached)` 懒启动、`/dsh-image-edit` 路由前缀、嵌入式 `PAGE` 的 localStorage 密钥流程。
+
+### B12.2 凭据层（唯一的真缺口）
+
+【文件核实】改造前：`gen.py` 的 `BASE` 硬编码、`KEY` 已被 B11.1 清成空串，
+**全链路没有任何 `environ/getenv`**。现在改成：
+
+```
+RELAY_API_KEY    必填；为空时 require_config() 抛 SystemExit
+RELAY_BASE_URL   选填，默认 https://image-direct.geiliapi.com/v1（自动去尾斜杠）
+RELAY_MODEL      选填，默认 gpt-image-2
+```
+
+**为什么用 `SystemExit` 而不是返回错误码**：`run_round.post_with_retry` 用 `except Exception`
+把异常映射成 `-1` 再重试 3 次，而缺凭据是配置错误、重试毫无意义。`SystemExit` 继承自
+`BaseException`，不会被那个 `except` 吞掉，于是能带原因一路冒泡、直接终止。
+
+同一层也接到了 `mask_edit_app.ENGINES` 的 `base`/`key`（服务端兜底），所以网页手涂
+**不必再手填 key**。已实测断言：**环境变量里的 key 不会出现在渲染出的页面里**
+（`GET /` 与 `/gallery` 都检不到，`apiKey` 输入框仍是 `value=""`）——网页手填的值只存浏览器
+localStorage，服务端从不下发。
+
+### B12.3 画廊「输入」页签的数据源替换
+
+ZCode **不把用户上传的图存成独立文件**：它以 base64 data URL 存在
+`<storage>/cli/artifacts/<净化后的 sessionId>/*.txt`，元数据在 `cli/db/db.sqlite` 的
+`session_input.payload.attachments`（`{ref, fileName, mime, bytes, previewRef?}`，
+**不含内容哈希**，只有传输期的 checksum 且不落库）。`ref` 是
+`zcode-artifact://<sessionId>/<artifactId>`。
+
+`zcode-image-edit/zcode_inputs.py` 按这条实测事实重建索引：过滤 `session.directory`
+等于本工作区 → 取 `image/*` 附件 → 由 `ref` 定位 artifact 文件 → 去掉 `data:<mime>;base64,`
+前缀解码 → **自己算 sha256** 与工作区图片配对。
+
+**关键取舍**：输出的 schema 与 DSH 版**完全一致**（`paths` / `excluded` / `unreachable`），
+因为画廊只消费这三个键；于是切数据源只需把 `GALLERY_USER_INPUTS` 指向新文件，
+**不必动 `gallery_category` 的任何判定**——那条 64 条回归断言继续全过（本轮实测 64/64）。
+
+顺带修掉一个**遗留崩溃**：`user_inputs()["atts"]` 是个死分支（`user_inputs()` 从不设置
+`atts` 键，只提供 paths/excluded/unreachable），一旦被走到必抛 `KeyError`；改为 `.get` 后
+优雅返回 404。
+
+### B12.4 未验证（必须如实标注）
+
+- 【未验证】**一次真实的改图调用**：要花额度、结果依赖上游。本轮的验证全部是本地确定性的
+  （`--dry-run` 出预算报表、遮罩逐像素对账、服务自检、安装哈希自检），**首次真实调用留给用户决定**。
+- 【未验证】画廊「输入」页签的端到端表现：结构已按实测的存储事实写好，但**本机 ZCode 还没有
+  任何上传**——实测本项目 12 行 `sendText` 的 `attachments` 全为 `[]`、`input_history` 非空 0 行、
+  artifacts 里 94 个文件全是工具结果 `.json`，**没有一个 `prompt-attachment-upload-*`**。
+  所以当前只能验到"如实报 0"。在 ZCode 对话里真发一张图后重跑 `zcode_inputs.py` 即可。
+- 【未验证】`--grabcut` 对动漫插画的效果未做对照，可能不如 `--flood` 稳。
+- 【判断】技能与命令需**重启 ZCode 会话**才会被发现（ZCode 在会话启动时扫描），本轮未能重启验证。
