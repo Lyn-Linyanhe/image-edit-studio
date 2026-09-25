@@ -119,7 +119,8 @@ def pick_reduction(content: Image.Image, refs: list[Image.Image],
 
 # ---------- 发送与下载 ----------
 
-def post_with_retry(fields: dict, files: dict, attempts: int = 3, timeout: int = 900):
+def post_with_retry(fields: dict, files: dict, attempts: int = 3, timeout: int = 900,
+                    quality: str = "low"):
     """发送，并对**传输层**瞬时失败自动重试。
 
     ⚠ 2026-09-22 实测修正：原来的 try/except 是**死代码**——`gen.call` 自己不抛异常，
@@ -132,7 +133,8 @@ def post_with_retry(fields: dict, files: dict, attempts: int = 3, timeout: int =
     last = None
     for i in range(1, attempts + 1):
         try:
-            st, txt = G.call(fields, files, timeout=timeout)
+            # 按档位选 key：low → 1K 的 key；medium/high → KEY_HD（见 gen.key_for）
+            st, txt = G.call(fields, files, timeout=timeout, key=G.key_for(quality))
         except Exception as e:  # noqa: BLE001  （gen.call 不抛，但别赌它以后不抛）
             st, txt = -1, f"{type(e).__name__}: {e}"
         if st != -1 and st < 500:
@@ -503,7 +505,7 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
                 # 记明"发送时是否自动前置了遮罩说明"，便于日后回溯提示词到底长什么样
                 "mask_prompt_prepended": bool(mask_p)}
     t0 = time.time()
-    st, txt = post_with_retry(fields, files)
+    st, txt = post_with_retry(fields, files, quality=quality)
     elapsed = time.time() - t0
     print(f"  HTTP {st}   {elapsed:.1f}s", flush=True)
     if st != 200:

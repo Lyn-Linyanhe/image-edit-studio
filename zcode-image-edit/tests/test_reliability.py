@@ -7,6 +7,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from PIL import Image, ImageDraw
+
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(r"C:\Users\typ\Desktop\mantu")
 PY = r"C:\Python314\python.exe"
@@ -71,9 +73,24 @@ try:
     temp_result.write_bytes(b"new")
     R.atomic_replace(temp_result, atomic_target)
     check(atomic_target.read_bytes() == b"new" and not temp_result.exists(), "atomic result replace")
+    atomic_copy_target = TMP / "atomic-copy.bin"
+    R.atomic_copy(atomic_target, atomic_copy_target)
+    check(atomic_copy_target.read_bytes() == b"new" and not list(TMP.glob(".atomic-copy.bin.*.tmp")),
+          "atomic cache copy")
+
+    cache_root = TMP / "cache"
+    cache_source = TMP / "cache-source.png"
+    Image.new("RGB", (24, 18), (12, 34, 56)).save(cache_source)
+    cache_fp = R.request_fingerprint(source=src, mask=mask, prompt="cache",
+                                     model="gpt-image-2", size="1024x1536", quality="low",
+                                     pad="crop", mask_invert=False, encode="png", mask_primary=True)
+    R.store_cache(cache_root, cache_fp, cache_source, validation={"status": "PASS"})
+    hit = R.load_valid_cache(cache_root, cache_fp)
+    check(hit is not None and Path(hit["result_path"]).is_file(), "valid cache hit")
+    Path(hit["result_path"]).write_bytes(b"corrupt")
+    check(R.load_valid_cache(cache_root, cache_fp) is None, "corrupt cache rejected")
 
     print("\n== protection metrics ==")
-    from PIL import Image, ImageDraw
     source = TMP / "source.png"
     result = TMP / "result.png"
     Image.new("RGB", (200, 200), (100, 100, 100)).save(source)
@@ -102,6 +119,32 @@ try:
         cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", errors="replace")
     check(dry.returncode == 0 and "dry-run" in dry.stdout and not (TMP / "dry.png").exists(),
           "dry-run does not send or create final output", dry.stderr[:180])
+
+    cache_mask = TMP / "cache-mask.png"
+    cache_mask.write_bytes(mask.read_bytes())
+    cache_fp = R.request_fingerprint(
+        source=src, mask=cache_mask, prompt="cache hit",
+        model="gpt-image-2", size="1024x1536", quality="low", pad="crop",
+        mask_invert=False, refs=[], encode="png", jpg_quality=90,
+        budget_mib=1.55, endpoint="https://image-direct.geiliapi.com/v1", mask_primary=True)
+    cache_root_cli = TMP / "cli-cache"
+    R.store_cache(cache_root_cli, cache_fp, src, validation={"status": "PASS"})
+    cache_out = TMP / "cache-hit.png"
+    cache_job = "cache-hit-local-test"
+    cache_env = dict(__import__("os").environ)
+    cache_env.pop("RELAY_API_KEY", None)
+    cache_env.pop("RELAY_API_KEY_HD", None)
+    cache_env.pop("RELAY_BASE_URL", None)
+    cache_env.pop("RELAY_MODEL", None)
+    hit_run = subprocess.run([
+        PY, str(PKG / "bin" / "zimage.py"), "edit", "--image", str(src),
+        "--mask-file", str(cache_mask), "--prompt", "cache hit", "--out", str(cache_out),
+        "--job-id", cache_job], cwd=str(ROOT), env={**cache_env, "ZIMAGE_CACHE_DIR": str(cache_root_cli)},
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    check(hit_run.returncode == 0 and "缓存命中" in hit_run.stdout and cache_out.is_file(),
+          "CLI cache hit skips upstream", hit_run.stderr[:180])
+    import shutil
+    shutil.rmtree(ROOT / ".zimage" / "jobs" / cache_job, ignore_errors=True)
     job_manifest = ROOT / ".zimage" / "jobs" / "local-test-job" / "manifest.json"
     if job_manifest.is_file():
         md = json.loads(job_manifest.read_text(encoding="utf-8"))

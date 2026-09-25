@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-SCHEMA_VERSION = "zimage-reliability-v1"
+SCHEMA_VERSION = "zimage-reliability-v2"
 
 
 def job_id() -> str:
@@ -68,6 +68,72 @@ def atomic_replace(src: Path, dst: Path, *, force: bool = False) -> None:
     os.replace(src, dst)
 
 
+def atomic_copy(src: Path, dst: Path, *, force: bool = True) -> None:
+    """Copy a completed artifact atomically; never expose a half-written cache file."""
+    import shutil
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists() and not force:
+        raise FileExistsError(f"目标已存在：{dst}")
+    fd, tmp = tempfile.mkstemp(prefix=f".{dst.name}.", suffix=".tmp", dir=str(dst.parent))
+    os.close(fd)
+    try:
+        shutil.copy2(src, tmp)
+        os.replace(tmp, dst)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def cache_entry(root: Path, fingerprint: str) -> tuple[Path, Path, Path]:
+    """Return (entry_dir, result_path, manifest_path) for one request fingerprint."""
+    entry = root / fingerprint[:2] / fingerprint
+    return entry, entry / "result.png", entry / "manifest.json"
+
+
+def load_valid_cache(root: Path, fingerprint: str) -> dict[str, Any] | None:
+    """Return a validated cache record, or None for any incomplete/corrupt entry."""
+    entry, result, manifest = cache_entry(root, fingerprint)
+    if not result.is_file() or not manifest.is_file():
+        return None
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        if data.get("request_fingerprint") != fingerprint:
+            return None
+        validation = data.get("validation") or {}
+        if validation.get("status") not in ("PASS", "PASS_WITH_WARNING"):
+            return None
+        if data.get("result_sha256") != sha256_file(result):
+            return None
+        with Image.open(result) as im:
+            im.load()
+        data["result_path"] = str(result)
+        return data
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def store_cache(root: Path, fingerprint: str, result: Path, **metadata: Any) -> dict[str, Any]:
+    """Store a validated result and its metadata; manifest is written last."""
+    entry, cached_result, manifest = cache_entry(root, fingerprint)
+    entry.mkdir(parents=True, exist_ok=True)
+    atomic_copy(result, cached_result, force=True)
+    with Image.open(cached_result) as im:
+        im.load()
+        result_size = list(im.size)
+    record = {
+        "request_fingerprint": fingerprint,
+        "result_sha256": sha256_file(cached_result),
+        "result_size": result_size,
+        "cached_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        **metadata,
+    }
+    write_manifest(manifest, record)
+    return record
+
+
 def _scrub(value: Any, *, field: str = "") -> Any:
     """递归清理 manifest 里的常见凭据字段和值。"""
     sensitive = any(x in field.lower() for x in ("key", "authorization", "token", "secret", "password"))
@@ -109,16 +175,27 @@ def update_manifest(path: Path, **updates: Any) -> dict[str, Any]:
 
 def request_fingerprint(*, source: Path, mask: Path | None, prompt: str,
                         model: str, size: str, quality: str,
-                        pad: str, mask_invert: bool) -> str:
+                        pad: str, mask_invert: bool,
+                        refs: list[Path] | None = None,
+                        encode: str = "png", jpg_quality: int = 90,
+                        budget_mib: float = 1.55,
+                        endpoint: str = "",
+                        mask_primary: bool = False) -> str:
     payload = {
         "source_sha256": sha256_file(source),
         "mask_sha256": sha256_file(mask) if mask else None,
+        "ref_sha256": [sha256_file(Path(ref)) for ref in (refs or [])],
         "normalized_prompt_sha256": sha256_text(normalize_prompt(prompt)),
         "model": model,
         "size": size,
         "quality": quality,
         "pad": pad,
+        "encode": encode,
+        "jpg_quality": int(jpg_quality),
+        "budget_mib": float(budget_mib),
+        "endpoint": endpoint.rstrip("/"),
         "mask_invert": bool(mask_invert),
+        "mask_primary": bool(mask_primary),
         "schema": SCHEMA_VERSION,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()

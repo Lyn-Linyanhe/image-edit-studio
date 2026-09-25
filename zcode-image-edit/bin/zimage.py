@@ -164,12 +164,29 @@ def _gen_sizes() -> dict:
     return gen.SIZES
 
 
+def _resolved_endpoint() -> str:
+    sys.path.insert(0, str(APP.parent))
+    import gen  # noqa: E402
+    return gen.BASE
+
+
+def _resolved_model() -> str:
+    sys.path.insert(0, str(APP.parent))
+    import gen  # noqa: E402
+    return gen.MODEL
+
+
 # ---------------------------------------------------------------- reliability
 
 RELIABILITY_STATES = {
     "created", "preflight_ok", "prepared", "submitted", "retrying",
-    "received", "decoded", "validated", "saved", "failed", "blocked",
+    "received", "decoded", "validated", "cache_hit", "saved", "failed", "blocked",
 }
+
+
+def _cache_root() -> Path:
+    value = os.environ.get("ZIMAGE_CACHE_DIR", "")
+    return Path(value).expanduser().resolve() if value else ROOT / ".zimage" / "cache"
 
 
 def _job_dir(job: str) -> Path:
@@ -333,11 +350,17 @@ def _plan_data(a, *, persist_mask: Path | None = None) -> tuple[dict, Path | Non
         ratio, warnings = _mask_summary(image, mask, protect=a.protect)
     else:
         ratio, warnings = None, []
+    mask_primary = bool(mask and not a.protect and not getattr(a, "no_primary", False))
     fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt,
-                               model=a.model or "gpt-image-2", size=a.size,
-                               quality=a.quality, pad=a.pad, mask_invert=a.protect)
+                               model=a.model or _resolved_model(), size=a.size,
+                               quality=a.quality, pad=a.pad, mask_invert=a.protect,
+                               refs=[Path(x) for x in a.ref], encode=getattr(a, "encode", "png"),
+                               jpg_quality=getattr(a, "jpg_quality", 90),
+                               budget_mib=getattr(a, "budget_mib", 1.55),
+                               endpoint=_resolved_endpoint(),
+                               mask_primary=mask_primary)
     estimated, coverage = _estimate_bytes(
-        image, mask, a.ref, a, mask_primary=bool(mask and not a.protect and not getattr(a, "no_primary", False))
+        image, mask, a.ref, a, mask_primary=mask_primary
     ) if mask else (None, None)
     if mask and a.protect:
         warnings.append("反向保护模式不使用 mask-primary：保护语义就是保留圈内原像素")
@@ -352,7 +375,7 @@ def _plan_data(a, *, persist_mask: Path | None = None) -> tuple[dict, Path | Non
         "mask_mode": "protect" if a.protect else ("edit" if mask else "whole"),
         "mask_ratio": ratio,
         "coverage_target_ratio": coverage,
-        "model": a.model or "gpt-image-2",
+        "model": a.model or _resolved_model(),
         "size": a.size,
         "quality": a.quality,
         "pad": a.pad,
@@ -393,9 +416,6 @@ def cmd_edit(a) -> int:
     out = Path(a.out).resolve()
     if out.exists() and not a.force:
         raise SystemExit(f"输出已存在（加 --force 才覆盖）：{out}")
-    if not a.dry_run and not _resolved_key():
-        print("✗ 未配置 RELAY_API_KEY —— 在花钱之前先停下。")
-        return 2
 
     job = a.job_id or R.job_id()
     if not re.match(r"^[A-Za-z0-9_.-]+$", job):
@@ -410,11 +430,17 @@ def cmd_edit(a) -> int:
         ratio, warnings = _mask_summary(image, mask, protect=a.protect) if mask else (None, [])
         prompt_file = jd / "prompt.txt"
         R.atomic_write_text(prompt_file, prompt_txt)
+        mask_primary = bool(mask and not a.protect and not getattr(a, "no_primary", False))
         fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt_txt,
-                                   model=a.model or "gpt-image-2", size=a.size,
-                                   quality=a.quality, pad=a.pad, mask_invert=a.protect)
+                                   model=a.model or _resolved_model(), size=a.size,
+                                   quality=a.quality, pad=a.pad, mask_invert=a.protect,
+                                   refs=[Path(x) for x in a.ref], encode=a.encode,
+                                   jpg_quality=getattr(a, "jpg_quality", 90),
+                                   budget_mib=a.budget_mib,
+                                   endpoint=_resolved_endpoint(),
+                                   mask_primary=mask_primary)
         estimated, coverage = _estimate_bytes(
-            image, mask, a.ref, a, mask_primary=bool(mask and not a.protect and not getattr(a, "no_primary", False))
+            image, mask, a.ref, a, mask_primary=mask_primary
         ) if mask else (None, None)
         if mask and a.protect:
             warnings.append("反向保护模式不使用 mask-primary：保护语义就是保留圈内原像素")
@@ -422,11 +448,27 @@ def cmd_edit(a) -> int:
                           source_sha256=R.sha256_file(image),
                           mask_sha256=R.sha256_file(mask) if mask else None,
                           prompt_sha256=R.sha256_text(R.normalize_prompt(prompt_txt)),
-                          model=a.model or "gpt-image-2", size=a.size, quality=a.quality,
+                          model=a.model or _resolved_model(), size=a.size, quality=a.quality,
                           pad=a.pad, mask_mode=("protect" if a.protect else ("edit" if mask else "whole")),
                           mask_ratio=ratio, coverage_target_ratio=coverage,
                           request_fingerprint=fp, warnings=warnings)
         R.update_manifest(manifest, state="prepared", status="prepared")
+
+        cache = None if a.no_cache or a.dry_run else R.load_valid_cache(_cache_root(), fp)
+        if cache is not None:
+            cached_result = Path(cache["result_path"])
+            R.atomic_copy(cached_result, out, force=a.force)
+            R.update_manifest(manifest, state="cache_hit", status="cache_hit",
+                              cache_dir=str(_cache_root()), cached_result_sha256=cache.get("result_sha256"),
+                              output=str(out), result_size=cache.get("result_size"),
+                              validation=cache.get("validation"))
+            R.update_manifest(manifest, state="saved", status="saved", output=str(out), from_cache=True)
+            print(f"✓ 缓存命中：{fp} → {out}  （未发送上游）")
+            return 0
+        if not a.dry_run and not _resolved_key():
+            R.update_manifest(manifest, state="blocked", status="auth_error", failure_type="auth_error")
+            print("✗ 未配置 RELAY_API_KEY —— 在花钱之前先停下。")
+            return 2
 
         temp_out = jd / "result.tmp.png"
         argv = [PY, str(ROUND), "--content", str(image), "--prompt", str(prompt_file),
@@ -491,7 +533,18 @@ def cmd_edit(a) -> int:
         else:
             R.update_manifest(manifest, state="validated", status="PASS", validation={"status": "PASS"})
         R.atomic_replace(temp_out, out, force=a.force)
-        R.update_manifest(manifest, state="saved", status="saved", output=str(out))
+        cache_warning = None
+        try:
+            cached = None if a.no_cache else R.store_cache(
+                _cache_root(), fp, out,
+                result_size=list(im.size), validation=metrics or {"status": "PASS"})
+            cache_warning = None
+        except Exception as cache_error:
+            cached = None
+            cache_warning = f"缓存写入失败：{type(cache_error).__name__}: {cache_error}"
+            print("⚠", cache_warning)
+        R.update_manifest(manifest, state="saved", status="saved", output=str(out),
+                          cache_stored=bool(cached), cache_warning=cache_warning)
         print(f"✓ 结果原子写入：{out}  {im.size[0]}x{im.size[1]}  {out.stat().st_size / 1024:.0f} KB")
         return 0
     except BaseException as e:
@@ -671,10 +724,12 @@ def main() -> int:
     e.add_argument("--quality", default="low", choices=["low", "medium", "high"])
     e.add_argument("--pad", default="crop", choices=["pad", "crop"])
     e.add_argument("--encode", default="png", choices=["png", "jpg"])
+    e.add_argument("--jpg-quality", type=int, default=90)
     e.add_argument("--model", default="")
     e.add_argument("--budget-mib", type=float, default=1.55)
     e.add_argument("--dry-run", action="store_true", help="只出预算报表与遮罩预览，不发送")
     e.add_argument("--force", action="store_true", help="允许覆盖已有输出")
+    e.add_argument("--no-cache", action="store_true", help="不读取或写入成功结果缓存")
     e.add_argument("--job-id", default="", help="显式指定可复现的 job id")
     e.set_defaults(fn=cmd_edit)
 

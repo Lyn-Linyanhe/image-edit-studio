@@ -38,7 +38,21 @@ import mask_edit_app as app
 
 BASE = app.env_cred("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
 KEY = app.env_cred("RELAY_API_KEY", "")
+# 第二个 key：高档（medium/high）用。没配就回退到 RELAY_API_KEY。
+# 实测（2026-09-25）：两个 key 在 geiliapi 上可见的模型**完全相同**，所以差异在配额/计费，
+# 不在模型权限——因此这里只是"按档位挑一个 key"，不做能力判断。
+KEY_HD = app.env_cred("RELAY_API_KEY_HD", "") or KEY
 MODEL = app.env_cred("RELAY_MODEL", "gpt-image-2")
+
+
+def key_for(quality: str) -> str:
+    """按档位选 key：low → KEY（1K）；medium/high → KEY_HD（高档）。
+
+    为什么要分：用户给了两个 key，明确说第一个是 1K 用的。
+    ⚠️ 两个 key 与**端点**是配套的——换 key 必须同时换 RELAY_BASE_URL，
+    否则会全是 401（实测：新 key 在 api-slb.micuapi.ai 上 401、在 geiliapi 上 200）。
+    """
+    return KEY_HD if quality in ("medium", "high") else KEY
 SIZES = {
     "low":    ["1024x1536", "1024x1024", "1536x1024"],
     "medium": ["1152x2048", "2048x2048", "2048x1152"],
@@ -98,13 +112,14 @@ def require_config() -> None:
                 "https://image-direct.geiliapi.com/v1", "gpt-image-2"))
 
 
-def call(fields, files, timeout=900):
+def call(fields, files, timeout=900, key=None):
     require_config()
     bnd = ("----Gen" + uuid.uuid4().hex).encode()
     body = app.build_multipart(fields, files, bnd)
     req = urllib.request.Request(BASE + "/images/edits", data=body, method="POST")
     req.add_header("Content-Type", f"multipart/form-data; boundary={bnd.decode()}")
-    req.add_header("Authorization", "Bearer " + KEY)
+    # 用哪一个 key 由上游按档位决定（见 key_for）；不传则用默认 KEY
+    req.add_header("Authorization", "Bearer " + (key or KEY))
     print(f"   sending {len(body):,} bytes ...")
     try:
         with urllib.request.urlopen(req, timeout=timeout,
