@@ -40,6 +40,11 @@ wsl.exe -d Ubuntu-24.04 -e bash -c 'bash /mnt/c/Users/typ/Desktop/mantu/tools/ws
 
 **适合（无状态、只吃命令行给的路径）**：`tone_report.py`、`fetch_url.py`、`erase_region.py`、`local_ops.py`、skill 的 `scripts/*.py`，以及 jq/sed/awk/grep 类文本管道。
 
+> ⚠️ **批量任务先问"数据在哪"，不要问"是不是文本"**（`docs/环境_Windows与WSL2混用.md` §3.3 有实测）：
+> 同一批 283 个文本文件，**WSL 读 `/mnt/c` 比 Windows 原生慢 12.5×**（0.68s vs 0.055s），而复制到 Linux 侧后快 10.5×（0.005s）。
+> 所以：**一次性 + 数据在仓库 → 留 Windows**；**要反复迭代 → 先复制到 `~/work/…` 再进 WSL**。
+> WSL 在文本处理上的不可替代价值是**能力**（Windows 侧没有 grep/awk/sed/wc/jq/rg），不是速度。
+
 **禁止**：
 1. 出图链路（`run_round.py` / `gen*.py` / `mask_edit_app.py`）——**除非 G3 通过**，且注意跨文件系统折损；
 2. `dsh-plugins/*`、任何读写 `~/.dsh` / `~/.agents` / `~/.zcode` 状态的脚本、`acceptance.py`（其 A4/B 段依赖 `Path.home()` 与 `sys.executable`，**只在 Windows 跑**）；
