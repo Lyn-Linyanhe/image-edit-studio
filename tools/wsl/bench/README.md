@@ -22,7 +22,19 @@ wsl.exe -d Ubuntu-24.04 -e bash -c 'T=/mnt/c/Users/typ/AppData/Local/Temp/mantu_
 1. **两侧必须跑同一份代码、同一批文件、同一个 URL**。第一版对照就是因为两侧语料不同（319 vs 283 文件）而无效，作废重做。
 2. **凡是"比对/计时"的结论，都要同时给出两侧样本量**。第一版还犯过"归一化返回空集合 → `Compare-Object` 报一致"的假通过。
 3. **不要用 pwsh 管道捕获 `wsl.exe` 或 Windows python 的输出**：实测会拿到 0 行或乱码（wsl.exe 自身消息与发行版输出混流；Windows python 的 stdout 是 cp936）。
-   可靠做法是在 bash 侧或 `cmd /c` 侧重定向到文件，再用 read 工具读。
+   可靠做法是在 bash 侧或 `cmd /c` 侧重定向到文件，再用 read 工具读。**下采样也要交叉**：两边交替跑，才能把"网络时段漂移"和"OS 差异"分开（`dl_dist.ps1` 就是这么做的）。
+
+## 又踩到的四个坑（写下来免得重犯）
+
+1. **Windows git 的 `core.autocrlf` 系统默认是 `true`**（Git for Windows 的安装默认）。做行尾实验前必须显式钉住，
+   否则 CRLF 会被静默归一化，实验前提直接错掉。
+2. **别把函数命名成 `Diff`、`Sort`、`Where` 这类名字**——它们是 PowerShell 内置别名（`Diff` = `Compare-Object`），
+   会被静默遮蔽，表现为莫名其妙的"缺少参数"。
+3. **`[IO.File]::WriteAllText` 用相对路径时按 .NET 进程 CWD 解析，而 `Push-Location` 不更新它**
+   → 测试文件会被写进**启动时的那个目录**。本次真发生过：`a.py`/`b.py`/`c.sh` 被写进了真实仓库根目录（已清理）。
+   规矩：脚本里凡是写文件，**一律用绝对路径**。
+4. **PowerShell 里 `\"` 不是转义**（要用 `` `" ``）。在 PowerShell 里拼 bash 命令字符串必然翻车——
+   把 bash 部分抽成独立 `.sh`，PowerShell 只传参数（`dl_once.sh` 就是这么拆出来的）。
 
 ## 已知缺项（有意不测）
 

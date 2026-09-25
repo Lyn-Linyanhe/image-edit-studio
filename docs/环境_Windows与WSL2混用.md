@@ -210,6 +210,54 @@ coreutils 侧同一结论：`wc -l` **0.8099s（/mnt/c）vs 0.0033s（Linux 副�
 
 > 未验证：集成终端里的中文渲染与输入法；`files.eol` 按语言配置能否完全消除假 diff（只做了原理判断，未实跑一次"保存即差分"的对照）。
 
+### 3.6 前三项"未验证"的收敛结果（2026-09-25 追加）
+
+脚本：`bench/pty_utf8.sh`、`bench/eol_probe.ps1`、`bench/dl_dist.ps1` + `bench/dl_once.sh`。
+
+#### ① 集成终端的中文 —— 能自动验的部分已验，**输入法仍需人工**
+
+| 检查项 | 结果 |
+|---|---|
+| PTY 数据通路（终端与远端 shell 之间就是一个 PTY） | 中文正文**逐字节一致**；唯一差异是 PTY 的 ONLCR（LF→CRLF）——终端固有行为，**不是编码损失**【实测】 |
+| 远端 shell 环境 | `LANG=C.UTF-8`、`locale charmap=UTF-8`、`TERM=xterm-256color`、登录 shell `/bin/bash`【实测】 |
+| Windows 侧字体（渲染发生在 Windows） | 微软雅黑／等线／SimSun／SimHei 在位；VS Code **未设** `terminal.integrated.fontFamily` → 走默认字体栈＋系统 CJK 回退【实测＋判断】 |
+| 仍需人工 | **输入法与字体清晰度**必须人在 UI 里打一次字，我无法驱动 UI |
+
+**人工核对（60 秒）**：Remote-WSL 窗口 `Ctrl+~` 开终端 → 切中文输入法打「中文测试」→ 回车，看有无丢字/错位。
+
+#### ② `files.eol` 能否消除整文件假 diff —— **能，但只能靠编辑器一侧**
+
+临时仓库对照（`core.autocrlf` 显式钉 false，与真实仓库一致）：
+
+| 对照 | 配置 | `git diff` 结果 |
+|---|---|---|
+| 1 | 现状 `* -text`，把 CRLF 存成 LF | **5 增 5 删 = 整文件假 diff** |
+| 2 | 同一基线，**保持 CRLF**（= `files.eol` 正确时的行为） | **无差异 ✓** |
+| 3 | 改 `* text=auto eol=crlf`，再存成 LF | **仍 5/5**（附警告：`LF will be replaced by CRLF`） |
+| 4 | 改 `* text=auto`（不强制 eol），`.py` 存成 LF | **无差异 ✓**（索引 `i/lf`、工作区 `w/crlf`） |
+
+结论：
+- **编辑器侧能**（对照 2）：只要保存时保持文件原行尾，**零 diff**；
+- **git 侧"温柔消除"不行**（对照 1、3）：`* -text` 与 `text=auto eol=crlf` 下，行尾变化都是整文件 diff；
+- 唯一让 git 侧看不见行尾差异的是 `text=auto`（对照 4），但那会把工作区统一成 LF，
+  **与仓库保护 `.cmd` 必须 CRLF 的初衷冲突**；
+- ⚠️ **真实仓库本来就是混合行尾**：`acceptance.py` = LF、`run_round.py` = CRLF、`tools/wsl/wslrun.sh` = LF【实测】
+  → **单一全局 `files.eol` 不可能对**；只能按语言/路径设，或提交前看 `git diff --stat`（整文件级 numstat 就是信号）。
+
+#### ③ 下载吞吐"2.1×" —— **成立，但修正为约 1.7×（中位，10 轮交叉采样）**
+
+| 组 | 样本 | 中位 | 中位速率 |
+|---|---|---|---|
+| Windows 默认协议 | n=10 | 1.839s | 3.8 MB/s |
+| **WSL 默认协议** | n=10 | **1.100s** | **6.3 MB/s** |
+| Windows 强制 HTTP/1.1 | n=6 | 1.933s | 3.6 MB/s |
+| **WSL 强制 HTTP/1.1** | n=6 | **1.111s** | **6.2 MB/s** |
+
+- **差异真实且可重复**：两边交替采样摊平了时段漂移，WSL 中位快 **1.67×**；
+- **不是 HTTP/2 造成的**：两边都强制 HTTP/1.1 后差距不变（Windows 的 curl **根本不支持 HTTP/2**；WSL 强制 1.1 后中位仅 1.100→1.111s）；
+- 原因未定【未验证】：候选为 Windows 侧 TLS 栈（Schannel vs OpenSSL）／安全软件内联扫描／TCP 栈差异；
+- 与 2026-09-21 那次"两边都约 8 KB/s"**不矛盾**：那次链路本身极慢，瓶颈在链路而不在协议栈。
+
 ## 4. 三类实测坑（都已加防御）
 
 1. **`. 文件` 只赋 shell 变量，不导出给子进程**
