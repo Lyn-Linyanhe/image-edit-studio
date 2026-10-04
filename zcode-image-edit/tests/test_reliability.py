@@ -106,6 +106,12 @@ try:
     check(met["status"] == "PASS", "protection metrics pass", json.dumps(met, ensure_ascii=False))
     check(met["protected_unchanged_ratio"] == 1.0, "protected area unchanged")
     check(met["editable_mean_abs_diff"] > met["protected_mean_abs_diff"], "editable area changed more")
+    technical = R.technical_image_metrics(result, requested_size="200x200")
+    check(technical["status"] == "PASS" and technical["size"] == [200, 200], "technical image metrics")
+    flat = TMP / "flat.png"
+    Image.new("RGB", (20, 20), (50, 50, 50)).save(flat)
+    flat_metrics = R.technical_image_metrics(flat, requested_size="20x20")
+    check(flat_metrics["status"] == "PASS_WITH_WARNING", "flat result needs review")
 
     print("\n== zimage CLI local behavior ==")
     cli_root = TMP / "cli-root"

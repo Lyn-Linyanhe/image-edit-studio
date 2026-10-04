@@ -691,13 +691,16 @@ def cmd_edit(a) -> int:
         cache = None if a.no_cache or a.dry_run else R.load_valid_cache(_cache_root(), fp)
         if cache is not None:
             cached_result = Path(cache["result_path"])
+            cache_validation = cache.get("validation") or {"status": "PASS"}
             R.atomic_copy(cached_result, out, force=a.force)
             R.update_manifest(manifest, state="cache_hit", status="cache_hit",
                               cache_dir=str(_cache_root()), cached_result_sha256=cache.get("result_sha256"),
                               output=str(out), result_size=cache.get("result_size"),
-                              validation=cache.get("validation"))
-            R.update_manifest(manifest, state="saved", status="saved", output=str(out), from_cache=True)
-            print(f"✓ 缓存命中：{fp} → {out}  （未发送上游）")
+                              validation=cache_validation)
+            final_status = cache_validation.get("status", "PASS")
+            R.update_manifest(manifest, state="saved", status=final_status, output=str(out), from_cache=True)
+            note = "需语义复核" if final_status == "NEEDS_REVIEW" else "已验收"
+            print(f"✓ 缓存命中：{fp} → {out}  （未发送上游；{note}）")
             return 0
         if not a.dry_run and not _resolved_key():
             R.update_manifest(manifest, state="blocked", status="auth_error", failure_type="auth_error")
@@ -755,6 +758,7 @@ def cmd_edit(a) -> int:
         R.update_manifest(manifest, state="decoded", status="decoded",
                           result_size=list(im.size), result_bytes=temp_out.stat().st_size)
         metrics = None
+        validation = None
         if mask:
             metrics = R.protection_metrics(image, temp_out, mask,
                                            requested_size=a.size, pad=a.pad, invert=a.protect)
@@ -766,13 +770,25 @@ def cmd_edit(a) -> int:
                 print("✗ 遮罩验收失败；结果保留在 Job 目录，没有替换最终输出")
                 return 4
         else:
-            R.update_manifest(manifest, state="validated", status="PASS", validation={"status": "PASS"})
+            technical = R.technical_image_metrics(temp_out, requested_size=a.size)
+            if technical["status"] == "FAIL":
+                R.update_manifest(manifest, state="failed", status="invalid_image",
+                                  failure_type="invalid_image", technical_validation=technical)
+                print("✗ 结果技术验收失败：", json.dumps(technical, ensure_ascii=False))
+                return 3
+            validation = {
+                "status": "NEEDS_REVIEW",
+                "technical": technical,
+                "semantic": {"status": "PENDING", "reason": "整图结果需按任务要求做视觉语义验收"},
+            }
+            R.update_manifest(manifest, state="validated", status="NEEDS_REVIEW", validation=validation)
+            print("整图技术验收通过；语义验收待 AI 视觉复核：", json.dumps(technical, ensure_ascii=False))
         R.atomic_replace(temp_out, out, force=a.force)
         cache_warning = None
         try:
             cached = None if a.no_cache else R.store_cache(
                 _cache_root(), fp, out,
-                result_size=list(im.size), validation=metrics or {"status": "PASS"})
+                result_size=list(im.size), validation=validation or metrics or {"status": "PASS"})
             cache_warning = None
         except Exception as cache_error:
             cached = None

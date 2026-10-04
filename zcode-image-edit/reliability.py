@@ -103,7 +103,7 @@ def load_valid_cache(root: Path, fingerprint: str) -> dict[str, Any] | None:
         if data.get("request_fingerprint") != fingerprint:
             return None
         validation = data.get("validation") or {}
-        if validation.get("status") not in ("PASS", "PASS_WITH_WARNING"):
+        if validation.get("status") not in ("PASS", "PASS_WITH_WARNING", "NEEDS_REVIEW"):
             return None
         if data.get("result_sha256") != sha256_file(result):
             return None
@@ -199,6 +199,37 @@ def request_fingerprint(*, source: Path, mask: Path | None, prompt: str,
         "schema": SCHEMA_VERSION,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def technical_image_metrics(path: Path, *, requested_size: str | None = None) -> dict[str, Any]:
+    """Deterministic decode/shape/content sanity checks; not semantic acceptance."""
+    try:
+        with Image.open(path) as im:
+            im.load()
+            rgb = np.asarray(im.convert("RGB"), dtype=np.float32)
+            size = [int(im.width), int(im.height)]
+        mean = float(rgb.mean())
+        variance = float(rgb.var())
+        warnings: list[str] = []
+        status = "PASS"
+        if variance < 1.0:
+            status = "PASS_WITH_WARNING"
+            warnings.append("结果像素方差很低，可能是近乎纯色图；需要语义复核")
+        if requested_size:
+            expected = [int(x) for x in requested_size.split("x")]
+            if size != expected:
+                status = "PASS_WITH_WARNING"
+                warnings.append(f"结果尺寸 {size[0]}x{size[1]} != 请求 {expected[0]}x{expected[1]}")
+        return {
+            "status": status,
+            "size": size,
+            "bytes": path.stat().st_size,
+            "mean_rgb": round(mean, 3),
+            "variance_rgb": round(variance, 3),
+            "warnings": warnings,
+        }
+    except Exception as exc:
+        return {"status": "FAIL", "error": f"{type(exc).__name__}: {exc}", "warnings": ["结果无法完成技术检查"]}
 
 
 def _crop_for_target(im: Image.Image, target_ar: float) -> Image.Image:
