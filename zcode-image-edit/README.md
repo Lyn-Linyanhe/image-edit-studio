@@ -40,17 +40,24 @@ $env:RELAY_API_KEY = 'sk-...'                                    # 当前会话
 
 已实测的安全断言：环境变量里的 key 只进服务端兜底，**不会出现在渲染给访问者的页面里**。
 
-## 用法
+## AI 主流程与用法
+
+AI 默认负责任务分类、输入图角色分配、提示词编译、预检、提交和结果验收；网页只用于复杂遮罩绘制或画廊，不是默认生成入口。
 
 ```
 zimage.py doctor                       # 自检，排查第一步（不调接口）
-zimage.py edit --image 原图.png --rect 300,200,700,600 \
-               --prompt "把这块改成平滑灰绿渐变，无纹理无建筑" \
-               --out 结果.png --dry-run   # 先看预算与遮罩预览，不发送
-zimage.py edit ... --out 结果.png       # 去掉 --dry-run 真跑
+zimage.py plan --image 原图.png --whole \
+               --prompt-file prompt.txt --plan-out .zimage/plan.json
+                                         # 生成可复用本地计划，不发送
+zimage.py edit --plan-file .zimage/plan.json \
+               --out 结果.png --dry-run  # 复用计划先看预算，不发送
+zimage.py edit --plan-file .zimage/plan.json \
+               --out 结果.png            # 去掉 --dry-run 真跑
 zimage.py local tone-report 结果.png    # 确定性本地操作，不调接口
-zimage.py serve / gallery / stop
+zimage.py serve / gallery / stop         # 网页仅作手涂/画廊辅助
 ```
+
+`plan` 会原子写入 `zimage.plan` artifact、提示词快照和（有区域时）持久化遮罩；默认拒绝覆盖已有计划，需显式 `--force`。执行时会校验源图、参考图、提示词、遮罩和 fingerprint 未变化。
 
 区域规格：`--rect x0,y0,x1,y1`（可重复）｜`--polygon "x,y x,y x,y"`｜`--flood x,y[,tol]`
 （种子点漫水，换纯色背景最趁手）｜`--grabcut`｜`--mask-file M.png`｜`--whole`（整图档位）。
@@ -82,6 +89,8 @@ zimage.py gallery
 
 ## 已验证 / 未验证
 
+【实测】本地 plan artifact、持久化遮罩、计划复用、覆盖保护、缓存命中与测试隔离已通过 `zcode-image-edit/tests/test_reliability.py`；此前已有三次真实整图多图参考生成记录。
+
 已验证（均为本地，不花额度）：
 - `mask_gen.py` 三种区域规格：涂红区域与请求区域**逐像素吻合**，未改动区域与原图**逐像素一致**；
 - 凭据层：无 key 时在发请求前终止（rc=2）并给设置方法；`--dry-run` 不需要 key；
@@ -91,9 +100,9 @@ zimage.py gallery
 - 技能与命令安装后**逐哈希一致**，且通过 ZCode 的丢弃规则校验。
 
 未验证：
-- 【未验证】**一次真实的改图调用**——要花额度、依赖上游，留给你决定何时跑（先跑 `--dry-run`）；
-- 【未验证】画廊「输入」页签在 ZCode 侧的端到端表现（本机还没有 ZCode 上传的图，
-  所以只能验到"如实报 0"）；
+- 【未验证】当前 CLI 正向/反向遮罩的真实 Job 闭环（底层 `run_round.py` 曾有历史真实遮罩证据，但本轮只做离网验证）；
+- 【未验证】整图身份/姿态的自动语义验收，目前仍需 AI 视觉复核；
+- 【未验证】画廊「输入」页签在 ZCode 侧的端到端表现；
 - 【未验证】`--grabcut` 对动漫插画的效果未做对照，可能不如 `--flood` 稳。
 
 ## 与 DSH 插件的关系

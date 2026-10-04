@@ -190,8 +190,14 @@ def _cache_root() -> Path:
 
 
 def _job_dir(job: str) -> Path:
-    d = ROOT / ".zimage" / "jobs" / job
-    d.mkdir(parents=True, exist_ok=True)
+    base = os.environ.get("ZIMAGE_JOBS_DIR", "")
+    root = Path(base).expanduser().resolve() if base else ROOT / ".zimage" / "jobs"
+    root.mkdir(parents=True, exist_ok=True)
+    d = root / job
+    try:
+        d.mkdir()
+    except FileExistsError:
+        raise SystemExit(f"Job ID 已存在，请使用新的 --job-id：{job}")
     return d
 
 
@@ -331,6 +337,17 @@ def _classify_failure(output: str, rc: int) -> str:
     return "unknown" if rc else "failed"
 
 
+PLAN_ARTIFACT_TYPE = "zimage.plan"
+PLAN_SCHEMA_VERSION = "zimage-plan-v1"
+JOB_ID_RX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+
+
+def _valid_job_id(value: str) -> str:
+    if not JOB_ID_RX.fullmatch(value) or value in (".", ".."):
+        raise SystemExit("--job-id 只能以字母或数字开头，后接字母、数字、点、下划线或连字符")
+    return value
+
+
 def _plan_data(a, *, persist_mask: Path | None = None) -> tuple[dict, Path | None]:
     image = Path(a.image).resolve()
     source_size = _validate_input(image)
@@ -339,69 +356,247 @@ def _plan_data(a, *, persist_mask: Path | None = None) -> tuple[dict, Path | Non
     sizes = _gen_sizes()
     if a.size not in sizes.get(a.quality, []):
         raise SystemExit(f"--size {a.size} 不在 {a.quality} 档白名单内：{sizes.get(a.quality)}")
-    mask = persist_mask
+    mask = None
     temp_dir = None
-    if persist_mask is not None and (a.mask_file or not a.whole):
-        mask = _prepare_mask(a, image, persist_mask)
-    elif mask is None and (a.mask_file or not a.whole):
-        temp_dir = Path(tempfile.mkdtemp(prefix="zimage-plan-"))
-        mask = _prepare_mask(a, image, temp_dir / "mask.png")
+    if a.whole and (a.mask_file or a.rect or a.polygon or a.flood or a.grabcut is not None or a.protect):
+        raise SystemExit("--whole 不能同时指定区域、遮罩或 --protect")
+    if not a.whole:
+        if persist_mask is not None:
+            persist_mask.parent.mkdir(parents=True, exist_ok=True)
+            mask = _prepare_mask(a, image, persist_mask)
+        else:
+            temp_dir = Path(tempfile.mkdtemp(prefix="zimage-plan-"))
+            mask = _prepare_mask(a, image, temp_dir / "mask.png")
     if mask:
         ratio, warnings = _mask_summary(image, mask, protect=a.protect)
     else:
         ratio, warnings = None, []
+    model = a.model or _resolved_model()
     mask_primary = bool(mask and not a.protect and not getattr(a, "no_primary", False))
     fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt,
-                               model=a.model or _resolved_model(), size=a.size,
+                               model=model, size=a.size,
                                quality=a.quality, pad=a.pad, mask_invert=a.protect,
                                refs=[Path(x) for x in a.ref], encode=getattr(a, "encode", "png"),
                                jpg_quality=getattr(a, "jpg_quality", 90),
                                budget_mib=getattr(a, "budget_mib", 1.55),
                                endpoint=_resolved_endpoint(),
                                mask_primary=mask_primary)
-    estimated, coverage = _estimate_bytes(
-        image, mask, a.ref, a, mask_primary=mask_primary
-    ) if mask else (None, None)
+    estimated, coverage = (_estimate_bytes(image, mask, a.ref, a, mask_primary=mask_primary)
+                           if mask else (None, None))
     if mask and a.protect:
         warnings.append("反向保护模式不使用 mask-primary：保护语义就是保留圈内原像素")
+    mask_sha256 = R.sha256_file(mask) if mask else None
     if temp_dir is not None:
         import shutil
         shutil.rmtree(temp_dir, ignore_errors=True)
     data = {
+        "artifact_type": PLAN_ARTIFACT_TYPE,
+        "schema_version": PLAN_SCHEMA_VERSION,
         "job_id": getattr(a, "job_id", "") or R.job_id(),
         "source": str(image),
         "source_size": list(source_size),
+        "source_sha256": R.sha256_file(image),
         "mask": str(mask) if mask else None,
+        "mask_sha256": mask_sha256,
         "mask_mode": "protect" if a.protect else ("edit" if mask else "whole"),
         "mask_ratio": ratio,
         "coverage_target_ratio": coverage,
-        "model": a.model or _resolved_model(),
+        "refs": [{"path": str(Path(x).resolve()), "sha256": R.sha256_file(Path(x))} for x in a.ref],
+        "model": model,
         "size": a.size,
         "quality": a.quality,
         "pad": a.pad,
+        "encode": getattr(a, "encode", "png"),
+        "jpg_quality": getattr(a, "jpg_quality", 90),
+        "budget_mib": getattr(a, "budget_mib", 1.55),
+        "mask_primary": mask_primary,
+        "mask_invert": bool(a.protect),
+        "endpoint_sha256": R.sha256_text(_resolved_endpoint()),
         "prompt_sha256": R.sha256_text(R.normalize_prompt(prompt)),
         "fingerprint": fp,
         "estimated_request_bytes": estimated,
+        "budget_estimate": "deferred_to_run_round_dry_run" if estimated is None else "local_exact",
         "warnings": warnings,
         "status": "preflight_ok",
     }
     return data, mask
 
 
+def _write_plan_artifact(a, plan_out: Path) -> tuple[dict, Path]:
+    plan_out = plan_out.resolve()
+    if getattr(a, "job_id", ""):
+        _valid_job_id(a.job_id)
+    assets = plan_out.parent / f"{plan_out.stem}.assets"
+    force = bool(getattr(a, "force", False))
+    if (plan_out.exists() or assets.exists()) and not force:
+        raise SystemExit(f"计划已存在，请选择新路径或加 --force：{plan_out}")
+    prompt = _read_prompt(a)
+    plan_out.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{plan_out.stem}.", dir=plan_out.parent))
+    try:
+        data, mask = _plan_data(a, persist_mask=staging / "mask.png")
+        R.atomic_write_text(staging / "prompt.txt", prompt)
+    except BaseException:
+        import shutil
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    mask = assets / "mask.png" if mask is not None else None
+    prompt_path = assets / "prompt.txt"
+    artifact = {
+        "artifact_type": data["artifact_type"],
+        "schema_version": data["schema_version"],
+        "job_id": data["job_id"],
+        "status": data["status"],
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "source": {
+            "path": data["source"],
+            "sha256": data["source_sha256"],
+            "size": data["source_size"],
+        },
+        "refs": [{**ref, "role": "reference"} for ref in data["refs"]],
+        "mask": ({
+            "path": str(mask),
+            "sha256": data["mask_sha256"],
+            "mode": data["mask_mode"],
+            "ratio": data["mask_ratio"],
+        } if mask else None),
+        "prompt_path": str(prompt_path),
+        "prompt_sha256": data["prompt_sha256"],
+        "request": {
+            "model": data["model"],
+            "size": data["size"],
+            "quality": data["quality"],
+            "pad": data["pad"],
+            "encode": data["encode"],
+            "jpg_quality": data["jpg_quality"],
+            "budget_mib": data["budget_mib"],
+            "mask_primary": data["mask_primary"],
+            "mask_invert": data["mask_invert"],
+            "endpoint_sha256": data["endpoint_sha256"],
+        },
+        "fingerprint": data["fingerprint"],
+        "estimated_request_bytes": data["estimated_request_bytes"],
+        "budget_estimate": data["budget_estimate"],
+        "coverage_target_ratio": data["coverage_target_ratio"],
+        "warnings": data["warnings"],
+    }
+    import shutil
+    backup = Path(tempfile.mkdtemp(prefix=f".{plan_out.stem}.backup.", dir=plan_out.parent)) if force else None
+    old_plan = backup / "plan.json" if backup else None
+    old_assets = backup / "assets" if backup else None
+    published = False
+    try:
+        if plan_out.exists():
+            plan_out.replace(old_plan)
+        if assets.exists():
+            shutil.move(str(assets), str(old_assets))
+        staging.rename(assets)
+        R.write_manifest(plan_out, artifact)
+        published = True
+    except BaseException:
+        try:
+            if plan_out.exists():
+                plan_out.unlink()
+            if assets.exists():
+                shutil.rmtree(assets, ignore_errors=True)
+            if old_plan and old_plan.exists():
+                old_plan.replace(plan_out)
+            if old_assets and old_assets.exists():
+                shutil.move(str(old_assets), str(assets))
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
+            if backup:
+                shutil.rmtree(backup, ignore_errors=True)
+        raise
+    if backup:
+        shutil.rmtree(backup, ignore_errors=True)
+    return artifact, plan_out
+
+
+def _load_plan_file(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"计划文件无法读取：{path}: {exc}")
+    if data.get("artifact_type") != PLAN_ARTIFACT_TYPE or data.get("schema_version") != PLAN_SCHEMA_VERSION:
+        raise SystemExit(f"不支持的计划文件：{path}")
+    return data
+
+
+def _apply_plan_to_args(a, plan: dict) -> None:
+    source = (plan.get("source") or {}).get("path")
+    request = plan.get("request") or {}
+    if not isinstance(source, str):
+        raise SystemExit("计划缺少 source.path")
+    a.image = source
+    a.prompt = ""
+    a.prompt_file = plan.get("prompt_path", "")
+    if not a.prompt_file:
+        raise SystemExit("计划缺少 prompt_path")
+    a.ref = [item["path"] for item in plan.get("refs", [])]
+    a.size = request["size"]
+    a.quality = request["quality"]
+    a.pad = request["pad"]
+    a.encode = request.get("encode", "png")
+    a.jpg_quality = int(request.get("jpg_quality", 90))
+    a.budget_mib = float(request.get("budget_mib", 1.55))
+    a.model = request.get("model", "")
+    mask = plan.get("mask")
+    a.protect = (mask or {}).get("mode") == "protect"
+    a.whole = mask is None
+    a.mask_file = "" if a.whole else mask.get("path", "")
+    a.rect, a.polygon, a.flood = [], [], []
+    a.grabcut = None
+    a.dilate = 0
+    a.no_primary = not bool(request.get("mask_primary", False))
+    a.plan_job_id = plan.get("job_id", "")
+    a.plan_expected = plan
+
+
+def _verify_plan_inputs(plan: dict, prompt: str, image: Path, refs: list[str], mask: Path | None) -> None:
+    source = plan.get("source") or {}
+    if source.get("sha256") != R.sha256_file(image):
+        raise SystemExit("计划失效：源图内容已变化")
+    expected_refs = plan.get("refs") or []
+    if [str(Path(x).resolve()) for x in refs] != [str(Path(x["path"]).resolve()) for x in expected_refs]:
+        raise SystemExit("计划失效：参考图列表已变化")
+    if any(item.get("sha256") != R.sha256_file(Path(item["path"])) for item in expected_refs):
+        raise SystemExit("计划失效：参考图内容已变化")
+    if plan.get("prompt_sha256") != R.sha256_text(R.normalize_prompt(prompt)):
+        raise SystemExit("计划失效：提示词已变化")
+    expected_mask = (plan.get("mask") or {}).get("sha256")
+    if (expected_mask or None) != (R.sha256_file(mask) if mask else None):
+        raise SystemExit("计划失效：遮罩已变化")
+    request = plan.get("request") or {}
+    if request.get("endpoint_sha256") != R.sha256_text(_resolved_endpoint()):
+        raise SystemExit("计划失效：endpoint 已变化")
+
+
 def cmd_plan(a) -> int:
     """纯本地计划：图片/遮罩/尺寸/指纹/预算，绝不调用上游。"""
-    data, mask = _plan_data(a)
+    if getattr(a, "plan_out", ""):
+        data, plan_path = _write_plan_artifact(a, Path(a.plan_out))
+        print("  plan artifact:", plan_path)
+    else:
+        data, mask = _plan_data(a)
+    source = data["source"] if isinstance(data.get("source"), str) else data["source"]["path"]
+    source_size = data.get("source_size") or data["source"]["size"]
+    mask_info = data.get("mask")
+    mask_mode = data.get("mask_mode") or (mask_info["mode"] if mask_info else "whole")
+    mask_ratio = data.get("mask_ratio") if data.get("mask_ratio") is not None else (mask_info.get("ratio") if mask_info else None)
+    request = data.get("request", data)
     print("== zimage plan（本地，不发送）==")
     print("  job_id     :", data["job_id"])
-    print("  源图       :", data["source"])
-    print("  源图尺寸   :", "x".join(map(str, data["source_size"])))
-    print("  任务       :", data["mask_mode"])
-    print("  目标尺寸   :", data["size"], "质量:", data["quality"], "pad:", data["pad"])
-    print("  模型       :", data["model"])
+    print("  源图       :", source)
+    print("  源图尺寸   :", "x".join(map(str, source_size)))
+    print("  任务       :", mask_mode)
+    print("  目标尺寸   :", request["size"], "质量:", request["quality"], "pad:", request["pad"])
+    print("  模型       :", request["model"])
     print("  prompt sha  :", data["prompt_sha256"][:16])
     print("  fingerprint :", data["fingerprint"])
     print("  请求体估算 :", f"{data['estimated_request_bytes']:,} B" if data["estimated_request_bytes"] else "整图路径由 run_round dry-run 精算")
-    print("  修改面积   :", f"{data['mask_ratio'] * 100:.1f}%" if data["mask_ratio"] is not None else "整图")
+    print("  修改面积   :", f"{mask_ratio * 100:.1f}%" if mask_ratio is not None else "整图")
     print("  状态       : preflight_ok（计划可提交；仍需 dry-run 预算）")
     for w in data["warnings"]:
         print("  ⚠", w)
@@ -409,6 +604,17 @@ def cmd_plan(a) -> int:
 
 
 def cmd_edit(a) -> int:
+    if getattr(a, "plan_file", ""):
+        allowed = {"--plan-file", "--out", "--dry-run", "--force", "--no-cache", "--job-id"}
+        conflicts = {token.split("=", 1)[0] for token in sys.argv[2:]
+                     if token.startswith("--") and token.split("=", 1)[0] not in allowed}
+        if conflicts:
+            raise SystemExit("--plan-file 不能混用其他输入参数：" + ", ".join(sorted(conflicts)))
+        plan_path = Path(a.plan_file).resolve()
+        plan = _load_plan_file(plan_path)
+        _apply_plan_to_args(a, plan)
+    if not getattr(a, "image", ""):
+        raise SystemExit("必须给 --image 或 --plan-file")
     image = Path(a.image).resolve()
     _validate_input(image)
     prompt_txt = _read_prompt(a)
@@ -417,33 +623,61 @@ def cmd_edit(a) -> int:
     if out.exists() and not a.force:
         raise SystemExit(f"输出已存在（加 --force 才覆盖）：{out}")
 
-    job = a.job_id or R.job_id()
-    if not re.match(r"^[A-Za-z0-9_.-]+$", job):
-        raise SystemExit("--job-id 只能包含字母、数字、点、下划线、连字符")
+    plan_mask = None
+    if getattr(a, "plan_expected", None) is not None:
+        expected_mask_path = (a.plan_expected.get("mask") or {}).get("path")
+        plan_mask = Path(expected_mask_path).resolve() if expected_mask_path else None
+        if plan_mask and not plan_mask.is_file():
+            raise SystemExit(f"计划失效：遮罩文件不存在：{plan_mask}")
+        _verify_plan_inputs(a.plan_expected, prompt_txt, image, a.ref, plan_mask)
+        plan_request = a.plan_expected.get("request") or {}
+        mask_primary = bool(plan_mask and not a.protect and not getattr(a, "no_primary", False))
+        planned_fp = R.request_fingerprint(
+            source=image, mask=plan_mask, prompt=prompt_txt,
+            model=a.model or _resolved_model(), size=a.size,
+            quality=a.quality, pad=a.pad, mask_invert=a.protect,
+            refs=[Path(x) for x in a.ref], encode=a.encode,
+            jpg_quality=getattr(a, "jpg_quality", 90), budget_mib=a.budget_mib,
+            endpoint=_resolved_endpoint(), mask_primary=mask_primary)
+        if a.plan_expected.get("fingerprint") != planned_fp:
+            raise SystemExit("计划失效：请求 fingerprint 已变化")
+        if plan_request.get("endpoint_sha256") != R.sha256_text(_resolved_endpoint()):
+            raise SystemExit("计划失效：endpoint 已变化")
+
+    job = _valid_job_id(a.job_id) if a.job_id else R.job_id()
     jd = _job_dir(job)
     manifest = jd / "manifest.json"
     print(f"  job_id  : {job}")
     print(f"  manifest: {manifest}")
     _write_state(manifest, "created", job_id=job, source=str(image), status="created")
     try:
-        mask = _prepare_mask(a, image, jd / "mask.png")
-        ratio, warnings = _mask_summary(image, mask, protect=a.protect) if mask else (None, [])
+        plan = getattr(a, "plan_expected", None)
+        if plan is not None:
+            mask = plan_mask
+            ratio = (plan.get("mask") or {}).get("ratio")
+            warnings = list(plan.get("warnings") or [])
+            fp = plan["fingerprint"]
+            estimated = plan.get("estimated_request_bytes")
+            coverage = plan.get("coverage_target_ratio")
+        else:
+            mask = _prepare_mask(a, image, jd / "mask.png")
+            ratio, warnings = _mask_summary(image, mask, protect=a.protect) if mask else (None, [])
+            mask_primary = bool(mask and not a.protect and not getattr(a, "no_primary", False))
+            fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt_txt,
+                                       model=a.model or _resolved_model(), size=a.size,
+                                       quality=a.quality, pad=a.pad, mask_invert=a.protect,
+                                       refs=[Path(x) for x in a.ref], encode=a.encode,
+                                       jpg_quality=getattr(a, "jpg_quality", 90),
+                                       budget_mib=a.budget_mib,
+                                       endpoint=_resolved_endpoint(),
+                                       mask_primary=mask_primary)
+            estimated, coverage = _estimate_bytes(
+                image, mask, a.ref, a, mask_primary=mask_primary
+            )
+            if mask and a.protect:
+                warnings.append("反向保护模式不使用 mask-primary：保护语义就是保留圈内原像素")
         prompt_file = jd / "prompt.txt"
         R.atomic_write_text(prompt_file, prompt_txt)
-        mask_primary = bool(mask and not a.protect and not getattr(a, "no_primary", False))
-        fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt_txt,
-                                   model=a.model or _resolved_model(), size=a.size,
-                                   quality=a.quality, pad=a.pad, mask_invert=a.protect,
-                                   refs=[Path(x) for x in a.ref], encode=a.encode,
-                                   jpg_quality=getattr(a, "jpg_quality", 90),
-                                   budget_mib=a.budget_mib,
-                                   endpoint=_resolved_endpoint(),
-                                   mask_primary=mask_primary)
-        estimated, coverage = _estimate_bytes(
-            image, mask, a.ref, a, mask_primary=mask_primary
-        ) if mask else (None, None)
-        if mask and a.protect:
-            warnings.append("反向保护模式不使用 mask-primary：保护语义就是保留圈内原像素")
         R.update_manifest(manifest, job_id=job, state="preflight_ok", status="preflight_ok",
                           source_sha256=R.sha256_file(image),
                           mask_sha256=R.sha256_file(mask) if mask else None,
@@ -473,7 +707,8 @@ def cmd_edit(a) -> int:
         temp_out = jd / "result.tmp.png"
         argv = [PY, str(ROUND), "--content", str(image), "--prompt", str(prompt_file),
                 "--out", str(temp_out), "--size", a.size, "--quality", a.quality,
-                "--pad", a.pad, "--encode", a.encode, "--budget-mib", str(a.budget_mib)]
+                "--pad", a.pad, "--encode", a.encode, "--jpg-quality", str(a.jpg_quality),
+                "--budget-mib", str(a.budget_mib)]
         for r in a.ref:
             argv += ["--ref", r]
         if mask:
@@ -705,7 +940,8 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     e = sub.add_parser("edit", help="改图：区域→遮罩→调接口→落盘")
-    e.add_argument("--image", required=True)
+    e.add_argument("--image", default="")
+    e.add_argument("--plan-file", default="", help="复用 plan --plan-out 生成的本地计划")
     e.add_argument("--prompt", default="", help="要改成的样子（一句话）")
     e.add_argument("--prompt-file", default="")
     e.add_argument("--out", required=True)
@@ -754,6 +990,9 @@ def main() -> int:
     pl.add_argument("--budget-mib", type=float, default=1.55)
     pl.add_argument("--model", default="")
     pl.add_argument("--no-primary", action="store_true")
+    pl.add_argument("--plan-out", default="", help="将本地计划原子写入 JSON artifact")
+    pl.add_argument("--job-id", default="", help="计划使用的 job id")
+    pl.add_argument("--force", action="store_true", help="允许覆盖已有 plan artifact")
     pl.set_defaults(fn=cmd_plan)
 
     s = sub.add_parser("serve", help="拉起网页手涂页")

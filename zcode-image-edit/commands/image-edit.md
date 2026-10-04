@@ -4,11 +4,11 @@ argument-hint: "[要改成什么样]（可一并给出图片路径与区域，�
 skills: image-edit
 ---
 
-用 `image-edit` 技能完成这次改图。用户的意图：
+用 `image-edit` 技能作为执行层完成这次改图。AI 先解析用户意图、输入图角色和任务类型，再决定是否需要 `style-distill` 编译提示词。用户的意图：
 
 $ARGUMENTS
 
-按下面的顺序做，**不要跳步**：
+默认由 AI/CLI 完成，不打开网页；网页只在复杂区域无法用 `--rect/--polygon/--flood/--grabcut` 表达且确实需要手涂时使用。按下面的顺序做，**不要跳步**：
 
 1. 先跑自检：`C:\Python314\python.exe zcode-image-edit\bin\zimage.py doctor`。
    若报 `RELAY_API_KEY` 未设置，**停下来**把设置方法告诉用户（PowerShell 的 `$env:` 写法），

@@ -16,9 +16,7 @@ $ARGUMENTS
 2. 确认服务真的起来了：命令会打印 `GET http://127.0.0.1:8000/ → HTTP 200`。
    如果不是 200，**别猜**——让服务前台跑一次看报错：
    `C:\Python314\python.exe compose\images\mask_edit_app.py --port 8011`
-3. 告诉用户怎么做：在网页里**涂出要改的区域**、填提示词、点生成；
-   或者只用它**导出遮罩 PNG**，然后回头走命令行的批量/可复现路线。
-   凭据已由环境变量注入服务端默认值，页面上不必再手填。
+3. 告诉用户怎么做：在网页里**只涂出要改的区域并导出遮罩 PNG**；生成、提示词编译、dry-run、结果验收统一回到 AI/CLI 的 `edit --mask-file` 流程，不把网页当作平行主流程。凭据已由环境变量注入服务端默认值，页面上不必再手填。
 4. 用完提醒用户停止服务：`C:\Python314\python.exe zcode-image-edit\bin\zimage.py stop`
 
 注意：网页里手填的 Key 只存浏览器 localStorage，服务端不会下发它；
