@@ -6,6 +6,8 @@
         ③ 顺带标出"由用户图派生的"（尺寸/内容相关但哈希不同，例如我裁的 C_/D_ 版本）。
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import hashlib
 import os
@@ -13,7 +15,7 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-BASE = r"C:\Users\typ\Desktop\mantu"
+BASE = _MANTU_ROOT_STR
 ATT = os.path.join(os.path.expanduser("~"), ".dsh", "attachments")
 ROOTS = [os.path.join(BASE, "style-distill"), os.path.join(BASE, "compose")]
 EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}

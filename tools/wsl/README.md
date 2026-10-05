@@ -20,9 +20,9 @@
 ```powershell
 # Windows 侧：全 ASCII、只有路径 —— 这正是本通道存在的意义
 $env:WSL_UTF8='1'
-wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/doctor.sh
-wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/wslrun.sh <脚本绝对路径> [参数…]
-wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/wslrun.sh -- jq . < /mnt/c/...   # 管道/文本工具逃生口
+wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/doctor.sh
+wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/wslrun.sh <脚本绝对路径> [参数…]
+wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/wslrun.sh -- jq . < /mnt/c/...   # 管道/文本工具逃生口
 ```
 
 **不提供 `-c <内联代码>` 入口**：内联命令正是要消灭的那类故障（见 §5 的第 3 条实测）。
@@ -33,7 +33,7 @@ wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/wslrun.
 可靠做法：**在 bash 侧重定向到文件，再用 read 工具读**：
 
 ```powershell
-wsl.exe -d Ubuntu-24.04 -e bash -c 'bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/wslrun.sh <脚本> <参数> > /mnt/c/Users/typ/AppData/Local/Temp/out.txt 2>&1'
+wsl.exe -d Ubuntu-24.04 -e bash -c 'bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/wslrun.sh <脚本> <参数> > /mnt/c/Users/<用户名>/AppData/Local/Temp/out.txt 2>&1'
 ```
 
 ## 4. 白名单 / 黑名单
@@ -60,7 +60,7 @@ wsl.exe -d Ubuntu-24.04 -e bash -c 'bash /mnt/c/Users/typ/Desktop/mantu/tools/ws
 ## 6. 门禁
 
 ```powershell
-wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/doctor.sh --io <产物目录> --repeat 3
+wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/doctor.sh --io <产物目录> --repeat 3
 ```
 
 判据与不通过时的处置见 `docs/环境_Windows与WSL2混用.md`。**改完本目录任何 `.sh` 都要重跑 doctor**：`.gitattributes` 是 `* -text`（字节原样），git **不会**替我们把 CRLF 转成 LF。

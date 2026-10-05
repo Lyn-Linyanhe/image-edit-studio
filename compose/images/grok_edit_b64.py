@@ -1,6 +1,8 @@
 """Confirm image-to-image (grok-imagine-edit) also honours response_format=b64_json,
 and that a single reference image is preserved reasonably."""
 import base64
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import io
 import json
 import ssl
@@ -45,7 +47,7 @@ def png(im):
     b = io.BytesIO(); im.save(b, "PNG", optimize=True); return b.getvalue()
 
 
-src = Image.open("C:/Users/typ/Desktop/mantu/compose/input_red.jpg").convert("RGB")
+src = Image.open(f"{_MANTU_ROOT_STR}/compose/input_red.jpg").convert("RGB")
 ref = src.resize((1024, 1024))
 src_arr = np.asarray(ref).astype(np.float32)
 

@@ -6,6 +6,8 @@ Follows the supplied spec exactly:
 Note the spec's own warning: do NOT send OpenAI `quality` to these models.
 """
 import base64
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import io
 import json
 import ssl
@@ -108,7 +110,7 @@ ok2 = report("grok-imagine-image res=1k",
 
 # build a small reference image
 ref = Image.fromarray(np.asarray(
-    Image.open("C:/Users/typ/Desktop/mantu/compose/input_red.jpg").convert("RGB")
+    Image.open(f"{_MANTU_ROOT_STR}/compose/input_red.jpg").convert("RGB")
     .resize((512, 512))), "RGB")
 b = io.BytesIO(); ref.save(b, "PNG", optimize=True)
 ref_png = b.getvalue()
@@ -123,7 +125,7 @@ ok3 = report("grok-imagine-edit 1 ref",
 
 print("\n=== 4. image-to-image with an extra reference (image[1]) ===")
 b2 = io.BytesIO()
-Image.open("C:/Users/typ/Desktop/mantu/compose/style_ref.png").convert("RGB") \
+Image.open(f"{_MANTU_ROOT_STR}/compose/style_ref.png").convert("RGB") \
     .resize((512, 512)).save(b2, "PNG", optimize=True)
 style_png = b2.getvalue()
 ok4 = report("grok-imagine-edit 2 refs",

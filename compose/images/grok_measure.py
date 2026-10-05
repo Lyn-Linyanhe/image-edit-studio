@@ -1,6 +1,8 @@
 """Download the Grok outputs and measure them, so we know what the engine
 actually produces (size, palette behaviour, whether edits preserve the input)."""
 import base64
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import io
 import json
 import ssl
@@ -60,7 +62,7 @@ for res, size in (("1k", "1024x1024"), ("2k", "2048x2048")):
         print(f"  {res:3s} -> FAILED {type(e).__name__}: {e}")
 
 print("\n=== image-to-image: does it preserve the input? ===")
-ref_im = Image.open("C:/Users/typ/Desktop/mantu/compose/input_red.jpg").convert("RGB")
+ref_im = Image.open(f"{_MANTU_ROOT_STR}/compose/input_red.jpg").convert("RGB")
 ref_small = ref_im.resize((768, 768))
 b = io.BytesIO(); ref_small.save(b, "PNG", optimize=True)
 ref_png = b.getvalue()

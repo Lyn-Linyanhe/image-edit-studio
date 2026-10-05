@@ -9,10 +9,12 @@ Fixes over v1:
   - narrow blend band so the new background keeps a real gradient
 """
 import os
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 import cv2
 import numpy as np
 
-BASE = "C:/Users/typ/Desktop/mantu/compose/"
+BASE = f"{_MANTU_ROOT_STR}/compose/"
 OUT = BASE + "out2/"
 os.makedirs(OUT, exist_ok=True)
 

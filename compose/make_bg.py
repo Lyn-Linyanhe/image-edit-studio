@@ -17,9 +17,11 @@ Output is a smooth, NOISE-FREE gradient (no brush texture, no cloud/雾纹),
 built from the percentile-filtered column/row profiles and lightly smoothed.
 """
 import numpy as np
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 from PIL import Image, ImageFilter
 
-BASE = "C:/Users/typ/Desktop/mantu/compose/"
+BASE = f"{_MANTU_ROOT_STR}/compose/"
 OUT = BASE + "bg_graygreen.png"
 
 im = Image.open(BASE + "base_v1.png").convert("RGB")

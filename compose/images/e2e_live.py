@@ -8,6 +8,8 @@ The character is protected by a generous rectangle covering the head + long
 hair slab; everything outside it is painted as editable.
 """
 import base64
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import io
 import json
 import ssl
@@ -18,8 +20,8 @@ import numpy as np
 from PIL import Image
 
 APP = "http://127.0.0.1:8000"
-SRC = "C:/Users/typ/Desktop/mantu/compose/base_v1.png"
-OUT = "C:/Users/typ/Desktop/mantu/compose/images/"
+SRC = f"{_MANTU_ROOT_STR}/compose/base_v1.png"
+OUT = f"{_MANTU_ROOT_STR}/compose/images/"
 
 src = Image.open(SRC).convert("RGB")
 W, H = src.size

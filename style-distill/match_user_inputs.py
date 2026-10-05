@@ -4,6 +4,8 @@
 输出：每个上传对象 → 原始文件名/尺寸/字节 → 工作区里的副本（若有）
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import hashlib
 import json
@@ -13,7 +15,7 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-BASE = Path(r"C:\Users\typ\Desktop\mantu")
+BASE = Path(_MANTU_ROOT_STR)
 ATT = Path(os.path.expanduser("~")) / ".dsh" / "attachments"
 EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 

@@ -6,7 +6,7 @@
 ## A1. 给接手者的第一段提示词（可直接粘贴）
 
 ```
-工作区：C:\Users\typ\Desktop\mantu（Windows / PowerShell 7.5 / Python 3.14 / Node v24）
+工作区：<工作区>（Windows / PowerShell 7.5 / Python 3.14 / Node v24）
 先读 docs/迁移说明A_会话与技能.md 与 docs/迁移说明B_实现原理_改图与画廊.md，
 再读 style-distill/_skill/style-distill/SKILL.md。
 纪律（违反会被用户纠正）：
@@ -20,7 +20,7 @@
 
 | 项 | 值 | 出处 |
 |---|---|---|
-| 工作区 | `C:\Users\typ\Desktop\mantu` | 【文件核实】 |
+| 工作区 | `<工作区>` | 【文件核实】 |
 | 顶层目录 | `compose/ dsh-plugins/ style-distill/ t1/ 产图/ 图生图用/` | 【文件核实】 |
 | git | 工作区干净；**快照当时的** HEAD `602bbf1`（本会话 20+ 次提交）。**注：2026-09-25 重写历史后全部哈希已变**，原 `32aee1d` → `602bbf1`；当前 HEAD 见 A10 | 【实测】 |
 | 验收门禁 | `acceptance.py` **30/31**；唯一未过 C5「工作区有 1 项未提交」＝本次盘点脚本，批准后随文档一并提交（**2026-09-25 清理并提交后为 31/31**，见 A10） | 【实测】 |

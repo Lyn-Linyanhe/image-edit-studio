@@ -1,11 +1,13 @@
 """验证几个关键论断：是否真的没有纯黑；线稿颜色分布；留白比例；纯白像素纯度。"""
 import json
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-paths = sorted(Path(r"C:\Users\typ\Desktop\mantu").iterdir())
+paths = sorted(Path(_MANTU_ROOT_STR).iterdir())
 rows = []
 for p in paths:
     im = Image.open(p).convert("RGB").resize((600, 800), Image.LANCZOS)

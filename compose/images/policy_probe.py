@@ -7,6 +7,8 @@ Trials, cheapest first:
   4. edits with the user's image, plain prompt    -> is THIS IMAGE the trigger?
 """
 import base64
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import io
 import json
 import os
@@ -26,7 +28,7 @@ import mask_edit_app as app
 BASE = "https://image-direct.geiliapi.com/v1"
 KEY = ""
 MODEL = "gpt-image-2"
-USER_IMG = "C:/Users/typ/Desktop/mantu/compose/base_v1.png"
+USER_IMG = f"{_MANTU_ROOT_STR}/compose/base_v1.png"
 
 
 def post_multipart(path, fields, files, timeout=600):

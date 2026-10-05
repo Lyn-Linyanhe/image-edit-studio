@@ -4,6 +4,8 @@
 原图入口仍在、筛选与复制路径仍在）。真正的点击体验需要人眼一次。
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import json
 import re
@@ -72,7 +74,7 @@ for cat, label in (('deliver', "成果"), ('detail', "局部"), ('process', "过
 
 print("\n6) 原图接口仍正常")
 import urllib.parse                                          # noqa: E402
-sample = r"C:\Users\typ\Desktop\mantu\style-distill\round_arcade\out_v2_r4_wink.png"
+sample = rf"{_MANTU_ROOT_STR}\style-distill\round_arcade\out_v2_r4_wink.png"
 try:
     with urllib.request.urlopen(
             f"{LOCAL}/gallery/img?p={urllib.parse.quote(sample)}", timeout=30) as r:

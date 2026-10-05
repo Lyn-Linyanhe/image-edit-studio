@@ -12,6 +12,8 @@
   unreachable     被排除且只在附件库、无法在画廊定位的那些
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import hashlib
 import json
@@ -21,7 +23,7 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-BASE = Path(r"C:\Users\typ\Desktop\mantu")
+BASE = Path(_MANTU_ROOT_STR)
 ATT = Path(os.path.expanduser("~")) / ".dsh" / "attachments"
 SESS = Path(os.path.expanduser("~")) / ".dsh" / "sessions" / "--C-Users-typ-Desktop-mantu--"
 EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}

@@ -1963,12 +1963,13 @@ $('download').onclick = () => {
 #   过程 = 其余（work/、input/、target*、ref_*、round_lib、compose 杂项等）
 # 规则写在 gallery_category() 里，页面上每张卡片都带分类标签，便于核对与调整。
 # 只服务白名单根目录内的图片后缀，避免变成任意文件读取。
+_WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 GALLERY_ROOTS = [
-    r"C:\Users\typ\Desktop\mantu\style-distill",
-    r"C:\Users\typ\Desktop\mantu\compose",
+    os.path.join(_WORKSPACE, "style-distill"),
+    os.path.join(_WORKSPACE, "compose"),
 ]
 GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-GALLERY_REL_BASE = r"C:\Users\typ\Desktop\mantu"
+GALLERY_REL_BASE = _WORKSPACE
 GALLERY_SCAN_LIMIT = 3000          # 扫描上限（纯安全阀）
 GALLERY_PROCESS_CAP = 120          # 只有"过程"封顶：成果与局部一张不落
 

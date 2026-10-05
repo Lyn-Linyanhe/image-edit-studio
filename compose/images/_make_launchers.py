@@ -5,8 +5,10 @@
     而启动文件夹是每用户的、不需要提权、删除一个文件即可撤销。
 """
 from pathlib import Path
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 
-DIR = Path(r"C:\Users\typ\Desktop\mantu\compose\images")
+DIR = Path(rf"{_MANTU_ROOT_STR}\compose\images")
 PY = r"C:\Python314\python.exe"
 STARTUP_NAME = "改图服务_自启.cmd"
 

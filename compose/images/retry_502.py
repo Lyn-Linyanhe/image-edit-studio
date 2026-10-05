@@ -1,5 +1,7 @@
 """Is the 502 from the GPT edit transient or permanent? Retry it directly."""
 import io
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import json
 import ssl
 import sys
@@ -15,7 +17,7 @@ BASE = "https://image-direct.geiliapi.com/v1"
 GPT_KEY = ""
 GROK_KEY = ""
 
-src = Image.open("C:/Users/typ/Desktop/mantu/compose/input_red.jpg") \
+src = Image.open(f"{_MANTU_ROOT_STR}/compose/input_red.jpg") \
     .convert("RGB").resize((1024, 1024))
 b = io.BytesIO(); src.save(b, "PNG", optimize=True)
 img = b.getvalue()

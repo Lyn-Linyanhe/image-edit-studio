@@ -18,10 +18,12 @@ Guarantee verified at runtime: every pixel inside the mask is bit-identical to
 the original.
 """
 import os
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 import cv2
 import numpy as np
 
-BASE = "C:/Users/typ/Desktop/mantu/compose/"
+BASE = f"{_MANTU_ROOT_STR}/compose/"
 OUT = BASE + "deliver/"
 os.makedirs(OUT, exist_ok=True)
 

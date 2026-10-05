@@ -18,10 +18,12 @@ Steps:
   6. feather-blend inpainted bg into the original outside the protected zone
 """
 import cv2
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 import numpy as np
 from PIL import Image
 
-BASE = "C:/Users/typ/Desktop/mantu/compose/"
+BASE = f"{_MANTU_ROOT_STR}/compose/"
 OUT = BASE + "out/"
 
 import os

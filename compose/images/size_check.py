@@ -5,6 +5,8 @@ late result of an earlier timed-out request, so re-measure with a clean call and
 compare against the response's own width/height metadata fields.
 """
 import base64
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import io
 import json
 import ssl
@@ -20,7 +22,7 @@ from PIL import Image
 BASE = "https://image-direct.geiliapi.com/v1"
 KEY = ""
 
-src = Image.open("C:/Users/typ/Desktop/mantu/compose/input_red.jpg") \
+src = Image.open(f"{_MANTU_ROOT_STR}/compose/input_red.jpg") \
     .convert("RGB").resize((1024, 1024))
 b = io.BytesIO(); src.save(b, "PNG", optimize=True)
 img = b.getvalue()

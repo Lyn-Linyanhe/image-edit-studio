@@ -6,6 +6,8 @@ alpha mask in `mask`. Prints the raw body on any non-200 so the real cause is
 visible instead of a generic "generation failed".
 """
 import io
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import json
 import ssl
 import sys
@@ -23,7 +25,7 @@ BASE = "https://image-direct.geiliapi.com/v1"
 KEY = ""
 MODEL = "gpt-image-2"
 
-SRC = "C:/Users/typ/Desktop/mantu/compose/base_v1.png"
+SRC = f"{_MANTU_ROOT_STR}/compose/base_v1.png"
 src = Image.open(SRC).convert("RGB")
 W, H = src.size
 print(f"source {W}x{H}")

@@ -71,7 +71,7 @@ ShowDiff '* text=auto + *.sh eol=lf：.py 存成 LF'
 
 Say ""
 Say "=== 真实仓库当前实际行尾（抽样，含新增的 LF 文件）==="
-git -C 'C:\Users\typ\Desktop\mantu' ls-files --eol style-distill/round_lib/run_round.py style-distill/round_lib/acceptance.py tools/wsl/wslrun.sh
+git -C 'C:<工作区>' ls-files --eol style-distill/round_lib/run_round.py style-distill/round_lib/acceptance.py tools/wsl/wslrun.sh
 
 Remove-Item $root -Recurse -Force
 Say "（临时仓库已删除）"

@@ -6,7 +6,7 @@
 $ErrorActionPreference = 'Continue'
 $SIZE = 6.9   # MB（该轮子大小）
 $URL = 'https://pypi.tuna.tsinghua.edu.cn/packages/84/21/a35af28dcc61f37ed850a2d64c65c701321dfbf25085e469d5559360cbbf/pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl'
-$DL_ONCE = '/mnt/c/Users/typ/Desktop/mantu/tools/wsl/bench/dl_once.sh'
+$DL_ONCE = '/mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/bench/dl_once.sh'
 
 function TimeWin([string]$extra = '') {
     $sw = [Diagnostics.Stopwatch]::StartNew()

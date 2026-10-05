@@ -29,12 +29,12 @@ HELPERS = '''
 # 按修改时间倒序列出工作区里的图片；点缩略图在新标签打开原图，另给一个"复制路径"按钮。
 # 只服务白名单根目录内的图片后缀，避免变成任意文件读取。
 GALLERY_ROOTS = [
-    r"C:\\Users\\typ\\Desktop\\mantu\\style-distill",
-    r"C:\\Users\\typ\\Desktop\\mantu\\compose",
+    r"<用户目录>\\Desktop\\mantu\\style-distill",
+    r"<用户目录>\\Desktop\\mantu\\compose",
 ]
 GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 GALLERY_MAX = 240
-GALLERY_REL_BASE = r"C:\\Users\\typ\\Desktop\\mantu"
+GALLERY_REL_BASE = r"<用户目录>\\Desktop\\mantu"
 
 
 def _gallery_scan():

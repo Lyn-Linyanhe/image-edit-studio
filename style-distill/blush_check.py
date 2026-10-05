@@ -1,9 +1,11 @@
 """测腮红/唇色（低饱和柔粉）与眼睛瞳孔色。"""
 import numpy as np
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 from PIL import Image
 from pathlib import Path
 
-paths = sorted(Path(r"C:\Users\typ\Desktop\mantu").iterdir())
+paths = sorted(Path(_MANTU_ROOT_STR).iterdir())
 blush, pupil = [], []
 print(f"{'file':10}{'blush hex':>11}{'share%':>8}{'sat':>6}{'val':>6}")
 for p in paths:

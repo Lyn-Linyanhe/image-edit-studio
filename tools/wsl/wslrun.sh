@@ -3,7 +3,7 @@
 #
 # 用法（Windows 侧，全 ASCII、只有路径——这是本通道存在的意义）：
 #   $env:WSL_UTF8='1'
-#   wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/wslrun.sh <脚本路径> [参数…]
+#   wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/wslrun.sh <脚本路径> [参数…]
 #   wsl.exe -d Ubuntu-24.04 -e bash .../wslrun.sh -- <命令> [参数…]     # 管道/文本工具逃生口
 #
 # 两件事必须做对（都是实测得来，见 docs/环境_Windows与WSL2混用.md）：
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 LINUX_HOME="${HOME}"                                   # 先记下 Linux 家目录：缓存必须留在这边
-WIN_HOME="${MANTU_WIN_HOME:-/mnt/c/Users/typ}"
+WIN_HOME="${MANTU_WIN_HOME:-/mnt/c/Users/<用户名>}"
 VENV="${MANTU_VENV:-$LINUX_HOME/.venvs/mantu}"
 CRED="${MANTU_CRED_FILE:-$LINUX_HOME/.config/mantu/relay.env}"
 

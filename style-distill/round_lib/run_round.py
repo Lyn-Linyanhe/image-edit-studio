@@ -376,7 +376,8 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
             tw: int, th: int, pad: str, quality: str, budget: int, check_target: str | None,
             mask_p: Path | None = None, model: str = "", dry_run: bool = False, ask: bool = False,
             mask_invert: bool = False, mask_primary: bool = False,
-            encode: str = "png", jpg_quality: int = 90) -> int:
+            encode: str = "png", jpg_quality: int = 90, no_download: bool = False,
+            b64_result: bool = True) -> int:
     content = Image.open(content_p).convert("RGB")
     refs = [Image.open(p).convert("RGB") for p in refs_p]
     prompt = prompt_p.read_text(encoding="utf-8").strip()
@@ -494,6 +495,13 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
 
     fields = {"model": model or G.MODEL, "prompt": send_prompt, "n": "1",
               "size": f"{tw}x{th}", "quality": quality}
+    if b64_result:
+        # 让结果**内联返回**，彻底不走结果 CDN。2026-09-25 实测（同一份 2 张图载荷）：
+        #   不传该参数 → 返回 api.mikoto.vip 的 URL；该链路当时只有 0.2–5.4 KB/s、还会被重置，
+        #                而结果 URL 有效期很短 → 下载慢了就 404「image not found」永久丢图（本次 9 张全灭）。
+        #   传 response_format=b64_json → HTTP 200 内联 1,444,618 B（1024×1024），58.2s 到手。
+        # 因此默认开启：省掉一整条最不可靠的链路，也不用再赌 URL 有效期。
+        fields["response_format"] = "b64_json"
     base_rec = {"out": str(out_p), "size": f"{tw}x{th}", "pad": pad, "quality": quality,
                 "model": fields["model"], "prompt": str(prompt_p),
                 "prompt_sha1": hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:12],
@@ -522,6 +530,15 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
     elif item.get("url"):
         print(f"  result url: {item['url']}", flush=True)   # 先打印再下载
         note_pending(out_p, item["url"], "pending")         # 生成即落盘，下载慢/失败也不丢 URL
+        if no_download:
+            # 生成与取回**解耦**：只落 URL、不下载，立刻腾出并发槽去跑下一张。
+            # 依据（2026-09-25 实测）：把两者耦合在同一个并发批次里时，一个下载卡住会占死
+            # 并发槽 —— 6 个 job、并发 3 时，前 3 个卡在下载重试，**后 3 个根本没开始生成**。
+            # 取回交给 round_lib/fetch_url.py --pending 单独跑。
+            print("  --no-download：只落 URL，不下载（用 fetch_url.py --pending 补）", flush=True)
+            log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
+                      "result": "url(no-download)"})
+            return 0
         download(item["url"], out_p)
         note_pending(out_p, item["url"], "done")
         log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
@@ -567,6 +584,11 @@ def main() -> int:
                          "（1024×1536 两张高细节图：PNG 2.80 MiB → JPEG 0.56 MiB），"
                          "因此不必再走低质压缩档；代价是屏幕类高频内容会有 JPEG 压缩痕迹")
     ap.add_argument("--jpg-quality", type=int, default=90, help="--encode jpg 的质量，默认 90")
+    ap.add_argument("--no-download", action="store_true",
+                    help="只生成并落 URL、不下载（生成与取回解耦：一个下载卡住会占死并发槽，"
+                         "导致同批后续 job 根本不开始生成；取回改用 fetch_url.py --pending）")
+    ap.add_argument("--url-result", action="store_true",
+                    help="不要内联结果，改让中转站返回结果 URL（默认用 response_format=b64_json 内联）")
     ap.add_argument("--mask-primary", action="store_true",
                     help="**正向局部改图要用它**：把涂红的视觉蒙版当主图发送（不发干净原图）。"
                          "实测要点：不发干净原图，模型才无法「照抄原图恢复」，才会真的重画那块；"
@@ -598,7 +620,8 @@ def main() -> int:
             rc |= run_one(c, r, p, o, tw, th, a.pad, a.quality, budget, a.check_target or None,
                           mask_p=mask_p, model=a.model, dry_run=a.dry_run, ask=a.ask,
                           mask_invert=a.mask_invert, mask_primary=a.mask_primary,
-                          encode=a.encode, jpg_quality=a.jpg_quality)
+                          encode=a.encode, jpg_quality=a.jpg_quality,
+                          no_download=a.no_download, b64_result=not a.url_result)
         return rc
 
     print(f"并行发送 {len(jobs)} 个方案（并发 {a.concurrency}）", flush=True)
@@ -608,7 +631,7 @@ def main() -> int:
             print(f"  -> {p.name} => {o.name}", flush=True)
             futs.append(ex.submit(run_one, c, r, p, o, tw, th, a.pad, a.quality, budget,
                                   a.check_target or None, mask_p, a.model, a.dry_run, a.ask,
-                                  a.mask_invert, a.mask_primary, a.encode, a.jpg_quality))
+                                  a.mask_invert, a.mask_primary, a.encode, a.jpg_quality, a.no_download, not a.url_result))
         return max(f.result() for f in futs)
 
 

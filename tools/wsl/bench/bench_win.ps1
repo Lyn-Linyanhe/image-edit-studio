@@ -1,8 +1,18 @@
 # Windows+WSL2 搭配实测 · Windows 侧电池（与 bench_wsl.sh 对称，同代码同样本）
+param(
+    # 大样本输入图（约几十 MB 的 jpg/png）；不传则报错退出。
+    [string]$Big = '',
+    # Python 解释器；默认取 PATH 上的 python，也可指定完整路径。
+    [string]$Python = 'python'
+)
 $ErrorActionPreference = 'Continue'
+if (-not $Big -or -not (Test-Path $Big)) {
+    Write-Error '用法: ./bench_win.ps1 -Big <大图路径>（用 -Big 指定一张几十 MB 的样本图）'
+    exit 1
+}
 $W   = Join-Path $env:TEMP 'mantu_g5'
 $L   = Join-Path $W 'bench_win'
-$BIG = 'C:\Users\typ\Desktop\mantu\图生图用\Image_1789303749874_925.png'
+$BIG = $Big
 New-Item -ItemType Directory -Force -Path $L | Out-Null
 
 function Best3([scriptblock]$sb) {
@@ -20,7 +30,7 @@ function Best3([scriptblock]$sb) {
 Write-Output '== A 环境 =='
 $os = Get-CimInstance Win32_OperatingSystem
 "os=$($os.Caption) build $($os.BuildNumber)"
-"python=$(& C:\Python314\python.exe -V 2>&1)"
+"python=$(& $Python -V 2>&1)"
 "cpu=$((Get-CimInstance Win32_Processor | Select-Object -First 1).Name)"
 "cpu_cores=$((Get-CimInstance Win32_Processor | Measure-Object NumberOfLogicalProcessors -Sum).Sum)"
 "mem_total_mb=$([math]::Round($os.TotalVisibleMemorySize/1024))"
@@ -30,9 +40,9 @@ $os = Get-CimInstance Win32_OperatingSystem
 Write-Output ''
 Write-Output '== B CPU（同一段纯 Python 整数循环 3e6 次，3 次取最好）=='
 $sw = [Diagnostics.Stopwatch]::StartNew()
-& C:\Python314\python.exe (Join-Path $W 'cpu_loop.py')
+& $Python (Join-Path $W 'cpu_loop.py')
 $sw.Stop()
-"cpu_pyloop_win=$( & C:\Python314\python.exe (Join-Path $W 'cpu_loop.py') )s  (含解释器启动 $( [math]::Round($sw.Elapsed.TotalSeconds,3) )s)"
+"cpu_pyloop_win=$( & $Python (Join-Path $W 'cpu_loop.py') )s  (含解释器启动 $( [math]::Round($sw.Elapsed.TotalSeconds,3) )s)"
 
 Write-Output ''
 Write-Output '== C 磁盘：顺序读同一份 18MB PNG =='

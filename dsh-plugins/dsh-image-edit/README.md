@@ -149,8 +149,8 @@ config:
   routePath: '/dsh-image-edit'       # 本插件路由前缀（故意放在 /api 之外）
   port: 8000
   python: 'C:\Python314\python.exe'                                   # ← 换成你的解释器
-  serverScript: 'C:\Users\typ\Desktop\mantu\compose\images\mask_edit_app.py'  # ← 换成你的路径
-  serverCwd: 'C:\Users\typ\Desktop\mantu\compose\images'               # ← 同上
+  serverScript: '<工作区>\compose\images\mask_edit_app.py'  # ← 换成你的路径
+  serverCwd: '<工作区>\compose\images'               # ← 同上
   logFile: 'server.log'
   startTimeoutMs: 25000              # /ensure 等它起来的上限
 ```

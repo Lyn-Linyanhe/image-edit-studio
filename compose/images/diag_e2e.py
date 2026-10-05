@@ -2,11 +2,13 @@
 or is the check itself misaligned?
 """
 import io
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import numpy as np
 from PIL import Image
 
-SRC = "C:/Users/typ/Desktop/mantu/compose/base_v1.png"
-OUT = "C:/Users/typ/Desktop/mantu/compose/images/"
+SRC = f"{_MANTU_ROOT_STR}/compose/base_v1.png"
+OUT = f"{_MANTU_ROOT_STR}/compose/images/"
 res = Image.open(OUT + "e2e_result.png").convert("RGB")
 src = Image.open(SRC).convert("RGB")
 W, H = src.size

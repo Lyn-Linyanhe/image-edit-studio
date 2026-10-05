@@ -6,6 +6,8 @@ round_manga 那批较旧的交付件会被挤出列表。所以改为：
 分类规则实测分布：成果 43、局部 19、过程 216（旧规则）；本版把 lab 与 checks 归入"局部"。
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import pathlib
 import py_compile
@@ -34,11 +36,11 @@ NEW = r'''# --------------------------------------------------------------------
 # 规则写在 gallery_category() 里，页面上每张卡片都带分类标签，便于核对与调整。
 # 只服务白名单根目录内的图片后缀，避免变成任意文件读取。
 GALLERY_ROOTS = [
-    r"C:\Users\typ\Desktop\mantu\style-distill",
-    r"C:\Users\typ\Desktop\mantu\compose",
+    rf"{_MANTU_ROOT_STR}\style-distill",
+    rf"{_MANTU_ROOT_STR}\compose",
 ]
 GALLERY_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-GALLERY_REL_BASE = r"C:\Users\typ\Desktop\mantu"
+GALLERY_REL_BASE = _MANTU_ROOT_STR
 GALLERY_SCAN_LIMIT = 3000          # 扫描上限（纯安全阀）
 GALLERY_PROCESS_CAP = 120          # 只有"过程"封顶：成果与局部一张不落
 

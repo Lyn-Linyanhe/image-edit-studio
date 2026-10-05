@@ -10,11 +10,13 @@ Edge energy is measured two ways so a resolution change cannot fake it:
   * fraction of pixels whose local contrast exceeds a threshold
 """
 import numpy as np
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 from PIL import Image, ImageFilter
 
-SRC = "C:/Users/typ/Desktop/mantu/compose/style_ref.png"
-OUT = "C:/Users/typ/Desktop/mantu/compose/out/TECH_1.png"
-RED = "C:/Users/typ/Desktop/mantu/compose/input_red.jpg"
+SRC = f"{_MANTU_ROOT_STR}/compose/style_ref.png"
+OUT = f"{_MANTU_ROOT_STR}/compose/out/TECH_1.png"
+RED = f"{_MANTU_ROOT_STR}/compose/input_red.jpg"
 
 
 def load(p, size=None):

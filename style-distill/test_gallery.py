@@ -5,6 +5,8 @@
 验收三件事：① 画廊页能列出图片；② 图片字节能取到且类型正确；③ 目录穿越被拒。
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import json
 import sys
@@ -59,13 +61,13 @@ print(f"   含 out_v2_r4_wink：{'out_v2_r4_wink' in text}")
 print(f"   缩略图 <img> 数：{text.count('<img')}")
 
 print("4) 验收图片字节接口")
-sample = r"C:\Users\typ\Desktop\mantu\style-distill\round_arcade\out_v2_r4_wink.png"
+sample = rf"{_MANTU_ROOT_STR}\style-distill\round_arcade\out_v2_r4_wink.png"
 q = urllib.parse.quote(sample)
 code, body, ctype = req(f"{LOCAL}/gallery/img?p={q}", timeout=60)
 print(f"   HTTP {code}  {ctype}  {len(body)} B（原图 2382819 B）")
 
 print("5) 验收目录穿越防护（应 404）")
-for bad in (r"C:\Windows\win.ini", r"C:\Users\typ\Desktop\mantu\README.md",
-            r"C:\Users\typ\Desktop\mantu\..\..\Windows\win.ini"):
+for bad in (r"C:\Windows\win.ini", rf"{_MANTU_ROOT_STR}\README.md",
+            rf"{_MANTU_ROOT_STR}\..\..\Windows\win.ini"):
     c, b, _ = req(f"{LOCAL}/gallery/img?p={urllib.parse.quote(bad)}", timeout=10)
     print(f"   {bad[:52]:54s} HTTP {c}")

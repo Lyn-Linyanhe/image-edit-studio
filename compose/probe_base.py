@@ -6,9 +6,11 @@ colour(s) -- the original bg is NOT flat (there are diagonal architectural
 shapes), which matters for edge alpha estimation later.
 """
 import numpy as np
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 from PIL import Image
 
-BASE = "C:/Users/typ/Desktop/mantu/compose/"
+BASE = f"{_MANTU_ROOT_STR}/compose/"
 im = Image.open(BASE + "base_v1.png").convert("RGB")
 a = np.asarray(im).astype(np.float32)
 h, w, _ = a.shape

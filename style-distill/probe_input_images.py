@@ -3,13 +3,15 @@
   ② 若加"内容"页签，按"README 的 input/ 定义"会装进哪些文件（逐条列出）
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import hashlib
 import os
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
-BASE = r"C:\Users\typ\Desktop\mantu"
+BASE = _MANTU_ROOT_STR
 
 a = os.path.join(BASE, r"style-distill\round_snow\input\C_snow.jpg")
 b = os.path.join(BASE, r"style-distill\round_manga\input\c1dc05a287896769311f364517a30509_720.jpg")

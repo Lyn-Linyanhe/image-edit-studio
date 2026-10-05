@@ -5,6 +5,8 @@ the local server. This posts the same multipart shape the page builds and
 prints whatever /api/edit answers.
 """
 import io
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import json
 import uuid
 
@@ -16,7 +18,7 @@ APP = "http://127.0.0.1:8000"
 BASE = "https://image-direct.geiliapi.com/v1"
 KEY = ""
 
-SRC = "C:/Users/typ/Desktop/mantu/compose/base_v1.png"
+SRC = f"{_MANTU_ROOT_STR}/compose/base_v1.png"
 src = Image.open(SRC).convert("RGB")
 W, H = src.size
 print(f"source {W}x{H}")
@@ -90,7 +92,7 @@ for tag, c in cases.items():
         if n:
             raw = __import__("base64").b64decode(j["image_b64"])
             im = Image.open(io.BytesIO(raw))
-            out = "C:/Users/typ/Desktop/mantu/compose/images/app_" + tag[0] + ".png"
+            out = f"{_MANTU_ROOT_STR}/compose/images/app_" + tag[0] + ".png"
             open(out, "wb").write(raw)
             print(f"   saved {out}  {im.size}")
     else:

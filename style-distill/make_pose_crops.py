@@ -1,9 +1,11 @@
 """放大基准图 187D 的姿态区域：头部朝向、双手与书本的相对位置。"""
 from pathlib import Path
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 from PIL import Image
 
-src = Path(r"C:\Users\typ\Desktop\mantu\187DAFA40C9A79628386C5EE4F6966C4.jpg")
+src = Path(rf"{_MANTU_ROOT_STR}\187DAFA40C9A79628386C5EE4F6966C4.jpg")
 out = Path("style-distill/target/pose_ref")
 out.mkdir(parents=True, exist_ok=True)
 im = Image.open(src).convert("RGB")

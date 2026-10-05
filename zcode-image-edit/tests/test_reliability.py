@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """zimage reliability 第一批本地测试：不访问上游。"""
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import json
 import os
 import shutil
@@ -12,7 +14,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 sys.stdout.reconfigure(encoding="utf-8")
-ROOT = Path(r"C:\Users\typ\Desktop\mantu")
+ROOT = Path(_MANTU_ROOT_STR)
 PY = r"C:\Python314\python.exe"
 PKG = ROOT / "zcode-image-edit"
 sys.path.insert(0, str(PKG))

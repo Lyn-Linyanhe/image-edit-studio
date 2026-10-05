@@ -4,9 +4,11 @@ The bg of the 灰绿 reference is a soft gradient, so corner sampling tells us
 whether an asset is the original (gray-green field) or a later high-key version.
 """
 import numpy as np
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 from PIL import Image
 
-BASE = "C:/Users/typ/Desktop/mantu/compose/"
+BASE = f"{_MANTU_ROOT_STR}/compose/"
 
 for name in ["base_v1", "char_v2", "char_v3"]:
     im = Image.open(BASE + name + ".png").convert("RGB")

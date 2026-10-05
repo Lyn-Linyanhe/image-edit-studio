@@ -16,7 +16,7 @@ import os
 import sys
 from pathlib import Path
 
-WS = Path("/mnt/c/Users/typ/Desktop/mantu")
+WS = Path("/mnt/c/Users/<用户名>/Desktop/mantu")
 COMPOSE = WS / "compose" / "images"
 
 out: dict[str, object] = {

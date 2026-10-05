@@ -3,7 +3,7 @@ component contract is exact."""
 import re
 from pathlib import Path
 
-ROOT = Path(r"C:\Users\typ\AppData\Local\npm-cache\_npx\1e7f6d9597241db0\node_modules\@deepseek-ai")
+ROOT = Path(_os.environ.get("DSH_NPM_CACHE_DIR", ""))
 
 for pkg in ["dsh-client-ui-settings", "dsh-client-ui-sidebar", "dsh-client-ui-slots"]:
     d = ROOT / pkg / "lib" / "types"

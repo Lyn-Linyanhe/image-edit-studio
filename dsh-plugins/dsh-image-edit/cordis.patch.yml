@@ -30,11 +30,13 @@
         routePath: '/dsh-image-edit'
         # Port passed to the server when this plugin starts it.
         port: 8000
-        # Interpreter used to start it.
-        python: 'C:\Python314\python.exe'
-        # The server itself, its working directory, and its log file name.
-        serverScript: 'C:\Users\typ\Desktop\mantu\compose\images\mask_edit_app.py'
-        serverCwd: 'C:\Users\typ\Desktop\mantu\compose\images'
+        # Interpreter used to start it. Defaults resolve relative to the repo:
+        # the node half (lib/index.js) derives the server location from its own
+        # file position, so a plain `python` on PATH is enough. Override here if
+        # your interpreter lives elsewhere.
+        # python: 'C:\Python314\python.exe'
+        # serverScript: '<工作区>\compose\images\mask_edit_app.py'
+        # serverCwd: '<工作区>\compose\images'
         logFile: 'server.log'
         # How long /ensure waits for the freshly spawned server to answer.
         startTimeoutMs: 25000

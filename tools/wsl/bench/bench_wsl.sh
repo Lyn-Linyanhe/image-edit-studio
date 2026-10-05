@@ -3,8 +3,8 @@
 set -uo pipefail
 
 L=/home/typ/bench                 # Linux 侧工作区
-W=/mnt/c/Users/typ/AppData/Local/Temp/mantu_g5   # Windows 侧临时区（跨文件系统）
-BIG=/mnt/c/Users/typ/Desktop/mantu/图生图用/Image_1789303749874_925.png
+W=/mnt/c/Users/<用户名>/AppData/Local/Temp/mantu_g5   # Windows 侧临时区（跨文件系统）
+BIG=/mnt/c/Users/<用户名>/Desktop/mantu/图生图用/Image_1789303749874_925.png
 mkdir -p "$L" "$W/small_wsl"
 
 now() { date +%s%N; }

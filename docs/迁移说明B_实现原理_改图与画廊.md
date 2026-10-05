@@ -244,7 +244,7 @@ GUI 根页需 DSH 启动时打印的带令牌 URL（401），内置浏览器无�
 | `dsh-plugins/_test_client_button.mjs` | **0 失败**（7 个场景） | 两颗按钮**以不同 id 都注册成功**；标签为「改图」「图片」；点击 → `POST /dsh-image-edit/ensure` → 打开路由返回的 URL（图片按钮为 `<url>/gallery`）；起不来时**不打开死页面**并显示原因 |
 | `dsh-plugins/_test_lazy_start.mjs` | **0 失败**（8 组） | 注册 3 条路由；`ensure` **真的**拉起 Python 服务（407 ms 就绪）；二次 `ensure` 幂等；`/stop` 真杀掉；卸载时路由清空；坏配置不抛异常 |
 
-附带收获：测试台打印的 `script` 是 `C:\Users\typ\Desktop\mantu\compose\images\mask_edit_app.py`，
+附带收获：测试台打印的 `script` 是 `<工作区>\compose\images\mask_edit_app.py`，
 即**搬迁后的当前路径**——这独立佐证了插件加载的配置已是新路径（原先担心的"需重启 `dsh web`"隐患不成立：
 当前 DSH 进程启动于 2026-09-25 10:03，远晚于 09-18 搬迁与 09-20 profile 改动）。
 
@@ -268,7 +268,7 @@ GUI 根页需 DSH 启动时打印的带令牌 URL（401），内置浏览器无�
 
 - 插件的 `dsh.profile.bundles` **包含 `dsh-image-edit`**（光有 dependencies 不够，必须进这个清单才会被加载）；
 - `profiles/web/node_modules/dsh-image-edit` 是一个**目录联结（junction）**，`readlink` 指向
-  `\\?\C:\Users\typ\Desktop\mantu\dsh-plugins\dsh-image-edit`，5 个文件逐哈希相同——
+  `\\?\<工作区>\dsh-plugins\dsh-image-edit`，5 个文件逐哈希相同——
   也就是说**改工作区里的插件文件就是改 DSH 会加载的那份**，不必往 profile 里复制。
   （注意 `os.path.islink` 对 Windows 联结返回 False，但 `ReparsePoint` 属性为真；
   只按 `islink` 判断会误判成"不存在"。）

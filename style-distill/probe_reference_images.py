@@ -3,15 +3,17 @@
 先出数再定规则——上一轮就是靠这个才发现 round_lib、_smoke 之类会被误判。
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import os
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-ROOTS = [r"C:\Users\typ\Desktop\mantu\style-distill", r"C:\Users\typ\Desktop\mantu\compose"]
+ROOTS = [rf"{_MANTU_ROOT_STR}\style-distill", rf"{_MANTU_ROOT_STR}\compose"]
 EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-BASE = r"C:\Users\typ\Desktop\mantu"
+BASE = _MANTU_ROOT_STR
 
 cand = []
 for root in ROOTS:

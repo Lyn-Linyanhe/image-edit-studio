@@ -3,6 +3,8 @@
 扫描画廊的两个根目录，按"路径特征"试分类并打印每桶数量与样例。
 """
 from __future__ import annotations
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 
 import os
 import sys
@@ -10,9 +12,9 @@ from collections import Counter
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-ROOTS = [r"C:\Users\typ\Desktop\mantu\style-distill", r"C:\Users\typ\Desktop\mantu\compose"]
+ROOTS = [rf"{_MANTU_ROOT_STR}\style-distill", rf"{_MANTU_ROOT_STR}\compose"]
 EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-BASE = r"C:\Users\typ\Desktop\mantu"
+BASE = _MANTU_ROOT_STR
 
 
 def scan():

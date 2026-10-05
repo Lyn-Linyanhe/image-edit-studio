@@ -1,8 +1,10 @@
 """核对图2(47EC)的姿态：头部朝向、视线、手与书的相对位置与画幅关系。"""
 from pathlib import Path
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 from PIL import Image
 
-src = Path(r"C:\Users\typ\Desktop\mantu\47EC32AC427193D005E9658AF8461F97.jpg")
+src = Path(rf"{_MANTU_ROOT_STR}\47EC32AC427193D005E9658AF8461F97.jpg")
 out = Path("style-distill/target/pose_ref2")
 out.mkdir(parents=True, exist_ok=True)
 im = Image.open(src).convert("RGB")

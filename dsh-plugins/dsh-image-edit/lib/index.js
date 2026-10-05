@@ -35,21 +35,28 @@
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { request as httpRequest } from 'node:http'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const name = 'image-edit'
 
 /** Cordis services that must exist before apply runs. */
 export const inject = ['webServer']
 
+// Server coordinates derive from this plugin's own location, so a clone of the
+// repository works without editing machine-specific absolute paths here:
+//   <repo>/dsh-plugins/dsh-image-edit/lib/index.js -> <repo>
+const _here = dirname(fileURLToPath(import.meta.url))
+const _workspace = join(_here, '..', '..', '..')
+
 const DEFAULTS = {
   url: 'http://127.0.0.1:8000',
   label: '改图',
   routePath: '/dsh-image-edit',
   port: 8000,
-  python: 'C:\\Python314\\python.exe',
-  serverScript: 'C:\\Users\\typ\\Desktop\\mantu\\compose\\images\\mask_edit_app.py',
-  serverCwd: 'C:\\Users\\typ\\Desktop\\mantu\\compose\\images',
+  python: 'python',
+  serverScript: join(_workspace, 'compose', 'images', 'mask_edit_app.py'),
+  serverCwd: join(_workspace, 'compose', 'images'),
   logFile: 'server.log',
   startTimeoutMs: 25000,
 }

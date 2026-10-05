@@ -1,9 +1,11 @@
 """测签名元素：暖粉点缀(腮红/唇/道具) 与 头发主色。"""
 import numpy as np
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 from PIL import Image
 from pathlib import Path
 
-paths = sorted(Path(r"C:\Users\typ\Desktop\mantu").iterdir())
+paths = sorted(Path(_MANTU_ROOT_STR).iterdir())
 print(f"{'file':10}{'accent hex':>12}{'share%':>8}{'sat':>6}  {'hair hex':>9}{'lum':>6}")
 acc_all, hair_all = [], []
 for p in paths:

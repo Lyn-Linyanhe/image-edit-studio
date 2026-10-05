@@ -2,7 +2,7 @@
 # 一次性引导：在 WSL 侧建立 venv 并安装固定版本依赖。
 #
 # 用法（Windows 侧，全 ASCII 只有路径）：
-#   wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/bootstrap.sh
+#   wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/bootstrap.sh
 #
 # 幂等：venv 已存在则复用。可用 MANTU_VENV / MANTU_PIP_INDEX 覆盖默认值。
 set -euo pipefail

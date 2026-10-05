@@ -6,15 +6,15 @@
 
 ```powershell
 # ① WSL 侧（先跑，它会写出一个文件给 Windows 侧读，用于编码往返验证）
-wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/bench/bench_wsl.sh
+wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/bench/bench_wsl.sh
 # ② Windows 侧（对称电池；内部会自己调用 cpu_loop.py 与 curl.exe）
-pwsh -NoProfile -File C:\Users\typ\Desktop\mantu\tools\wsl\bench\bench_win.ps1
+pwsh -NoProfile -File <工作区>\tools\wsl\bench\bench_win.ps1
 # ③ 下载吞吐（两侧各自跑一次，用**同一个绝对 URL**，否则不可比）
-wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/bench/bench_dl.sh
+wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/bench/bench_dl.sh
 # ④ 双向可达性（Windows 侧先起一个 0.0.0.0:8124 的服务，再用它从 WSL 侧探）
-wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/typ/Desktop/mantu/tools/wsl/bench/probe_host.sh 172.18.64.1
+wsl.exe -d Ubuntu-24.04 -e bash /mnt/c/Users/<用户名>/Desktop/mantu/tools/wsl/bench/probe_host.sh 172.18.64.1
 # ⑤ WSLg 窗口验证（免 apt：直接编一个最小 X11 客户端）
-wsl.exe -d Ubuntu-24.04 -e bash -c 'T=/mnt/c/Users/typ/AppData/Local/Temp/mantu_g5; gcc -o /tmp/xtest $T/xtest.c -L/usr/lib/x86_64-linux-gnu -l:libX11.so.6 && /tmp/xtest'
+wsl.exe -d Ubuntu-24.04 -e bash -c 'T=/mnt/c/Users/<用户名>/AppData/Local/Temp/mantu_g5; gcc -o /tmp/xtest $T/xtest.c -L/usr/lib/x86_64-linux-gnu -l:libX11.so.6 && /tmp/xtest'
 ```
 
 ## 三条方法与纪律（都是踩过才知道的）
@@ -40,4 +40,4 @@ wsl.exe -d Ubuntu-24.04 -e bash -c 'T=/mnt/c/Users/typ/AppData/Local/Temp/mantu_
 
 - **GUI/X 只验到"窗口被 X 服务器接受并映射"**（`map_state=2`），没有验证渲染质量与键盘/输入法；
 - **`sudo` 需密码**，故未安装 `x11-apps`/`python3-tk` 等可用于更完整 GUI 测试的包；
-- 电池中的路径是本机实际路径（`C:\Users\typ\...`），换机需改；这与仓库其余文档的口径一致。
+- 电池中的路径是本机实际路径（`<用户目录>\...`），换机需改；这与仓库其余文档的口径一致。

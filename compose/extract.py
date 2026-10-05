@@ -11,11 +11,13 @@ The flat-gray composite is the important one: any leftover original
 background shows up immediately as a gray-green ring/halo.
 """
 import os
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 1)))
 import cv2
 import numpy as np
 from PIL import Image
 
-BASE = "C:/Users/typ/Desktop/mantu/compose/"
+BASE = f"{_MANTU_ROOT_STR}/compose/"
 DIAG = BASE + "diag/"
 os.makedirs(DIAG, exist_ok=True)
 

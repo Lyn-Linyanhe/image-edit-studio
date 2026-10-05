@@ -26,7 +26,7 @@
 | WSL 内其他 | git 2.43.0、curl 8.5.0、requests | 【实测】 |
 | **GPU 直通** | `nvidia-smi` = RTX 5060 Laptop 8151 MiB / 驱动 610.47；`/dev/dxg` 在位 | 【实测】 |
 | 网络 | pypi TUNA 直连可用（装包 11–18 MB/s）；`image-direct.geiliapi.com` 直连可达（`/` 返回 404，1–5s） | 【实测】 |
-| 文件可见性 | `/mnt/c` 可访问；`~/.dsh`、`~/.agents`、`~/.zcode` 均可在 `/mnt/c/Users/typ/…` 下看到 | 【实测】 |
+| 文件可见性 | `/mnt/c` 可访问；`~/.dsh`、`~/.agents`、`~/.zcode` 均可在 `/mnt/c/Users/<用户名>/…` 下看到 | 【实测】 |
 | 磁盘 | WSL 根盘 953 GB 可用；`/mnt/c` 136 GB 可用 | 【实测】 |
 | **Windows 侧 CUDA** | `D:\Anconda3\envs\dl-cv`：torch 2.11.0+cu128、`cuda_available True`、`arch_list` 含 `sm_120`、设备即该 5060 | 【实测】 |
 
@@ -39,7 +39,7 @@
 |---|---|
 | PIL/numpy/cv2 | **已装**（venv `~/.venvs/mantu`，版本对齐 Windows：pillow 12.3.0 / numpy 2.5.2 / opencv-headless 5.0.0.93）【实测】 |
 | 出图凭据 | **已接**（`~/.config/mantu/relay.env`，600，三键；仓库内无任何密钥）【实测】 |
-| `HOME` 差异 | WSL `HOME=/home/typ`，与 `~/.agents`、`~/.dsh` 的真身（`/mnt/c/Users/typ`）**不是同一个家** → 由 `wslrun.sh` 对齐 【实测】 |
+| `HOME` 差异 | WSL `HOME=/home/typ`，与 `~/.agents`、`~/.dsh` 的真身（`/mnt/c/Users/<用户名>`）**不是同一个家** → 由 `wslrun.sh` 对齐 【实测】 |
 | `jq` | 未装（apt 候选 1.7.1）。需要文本管道时再装 |
 | `node` | **不装**（DSH 不搬 WSL）；注意 `npm`/`npx`/`pnpm` 是 Windows 侧 shim 漏进 PATH 的假象 【实测】 |
 | Windows 本地代理 | 控制面板已启用 `127.0.0.1:7890`；**WSL 不可达**（宿主网关 `172.18.64.1:7890` 亦不可达）→ 需要代理的下载不在 WSL 做 【实测】 |
@@ -59,7 +59,7 @@
 |---|---|---|---|
 | G2 编码 | 语言环境 UTF-8、中文哨兵不乱码 | **PASS** | `locale charmap=UTF-8`；`WSL_UTF8=1` 下中文往返正常 |
 | G3 凭据 | 走真实代码路径 `env_cred('RELAY_API_KEY')` 非空 | **PASS** | `import_ok=true relay_key=true`；对照（刻意不注入）=`false`，说明门禁有区分度 |
-| G4 HOME 对齐 | `~/.agents/skills/style-distill/scripts/audit_and_check.py`、`~/.dsh/attachments`、会话目录均存在 | **PASS** | `home=/mnt/c/Users/typ`；三项 `true` |
+| G4 HOME 对齐 | `~/.agents/skills/style-distill/scripts/audit_and_check.py`、`~/.dsh/attachments`、会话目录均存在 | **PASS** | `home=/mnt/c/Users/<用户名>`；三项 `true` |
 | G5 I/O | `t_wsl ≤ 1.5 × t_w` 才可承接图片批处理 | **未过（1.95×）** | 见下表 |
 | G6 行尾 | 新增 `.sh` 无 `0x0D`、`bash -n` 通过 | **PASS** | 扫过 3 个 `.sh` 全通过 |
 | G7 回归 | Windows 侧 `acceptance.py` 31/31 | **PASS** | 提交 `f3509d7` 后实测 **31/31**（C1 扫 697 个文件 0 命中；C5 工作区干净）【实测】 |
@@ -300,7 +300,7 @@ coreutils 侧同一结论：`wc -l` **0.8099s（/mnt/c）vs 0.0033s（Linux 副�
 ## 7. 回退方式（通道是纯增量，回退零成本）
 
 ```powershell
-Remove-Item -Recurse -Force C:\Users\typ\Desktop\mantu\tools\wsl      # 仓库内新增件，无既有代码被改
+Remove-Item -Recurse -Force <工作区>\tools\wsl      # 仓库内新增件，无既有代码被改
 wsl.exe -d Ubuntu-24.04 -e bash -c 'rm -rf ~/.venvs/mantu ~/.config/mantu ~/io_sample'
 ```
 

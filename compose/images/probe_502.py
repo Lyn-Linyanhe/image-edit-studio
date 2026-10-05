@@ -19,6 +19,8 @@
     python probe_502.py --go --through 1     # 只跑到第 1 步
 """
 import argparse
+import os as _os
+_MANTU_ROOT_STR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), *([".."] * 2)))
 import base64
 import io
 import json
@@ -32,9 +34,9 @@ sys.path.insert(0, ".")
 import mask_edit_app as app  # noqa: E402
 from PIL import Image  # noqa: E402
 
-TARGET = r"C:\Users\typ\Desktop\mantu\style-distill\target\target.png"
-REF2 = r"C:\Users\typ\Desktop\mantu\47EC32AC427193D005E9658AF8461F97.jpg"
-REF3 = r"C:\Users\typ\Desktop\mantu\187DAFA40C9A79628386C5EE4F6966C4.jpg"
+TARGET = rf"{_MANTU_ROOT_STR}\style-distill\target\target.png"
+REF2 = rf"{_MANTU_ROOT_STR}\47EC32AC427193D005E9658AF8461F97.jpg"
+REF3 = rf"{_MANTU_ROOT_STR}\187DAFA40C9A79628386C5EE4F6966C4.jpg"
 
 SHORT_PROMPT = "smooth flat grey-green background, no objects"
 
