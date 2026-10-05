@@ -1,0 +1,42 @@
+{
+  "name": "image-edit",
+  "version": "0.1.2",
+  "description": "Local inpainting canvas for OpenAI-compatible image edits: paint the region, then call gpt-image-2 via your relay.",
+  "description_i18n": {
+    "en": "Local inpainting canvas for OpenAI-compatible image edits: paint the region, then call gpt-image-2 via your relay.",
+    "zh-CN": "本地涂抹改图：在图上画出要改的区域，经中转站调用 gpt-image-2 的图生图接口。"
+  },
+  "author": {
+    "name": "local"
+  },
+  "keywords": [
+    "image-edit",
+    "inpaint",
+    "gpt-image-2",
+    "mask"
+  ],
+  "skills": "./skills",
+  "commands": "./commands",
+  "userConfig": {
+    "port": {
+      "title": "本地服务端口",
+      "description": "改图画布监听的端口。只绑定 127.0.0.1。默认 8000。",
+      "type": "number",
+      "default": 8000
+    }
+  },
+  "mcpServers": {
+    "image-edit": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/mcp/image_edit_mcp.py"
+      ],
+      "env": {
+        "IMAGE_EDIT_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",
+        "IMAGE_EDIT_PORT": "${user_config.port}"
+      },
+      "timeoutMs": 60000
+    }
+  }
+}
