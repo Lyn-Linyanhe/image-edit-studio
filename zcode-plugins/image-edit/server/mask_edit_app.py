@@ -26,12 +26,14 @@ from typing import Any
 from urllib.parse import urlparse, parse_qs
 
 from PIL import Image, ImageOps
+from public_fetch import UnsafeDownload, fetch_public_bytes
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
 PLUGIN_ROOT = ROOT.parent
-PID_FILE = PLUGIN_ROOT / ".image-edit.pid"
-LOG_FILE = PLUGIN_ROOT / "server.log"
+STATE_ROOT = Path(os.environ.get("IMAGE_EDIT_STATE_DIR") or PLUGIN_ROOT)
+PID_FILE = STATE_ROOT / ".image-edit.pid"
+LOG_FILE = STATE_ROOT / "server.log"
 USER_LOCAL = Path.home() / ".zcode" / "image-edit.local.json"
 
 RED = (255, 0, 0)
@@ -79,43 +81,50 @@ RED_PROMPT = (
 def normalize_base(base: str) -> str:
     """Accept base with or without /v1 and always produce the /v1 form."""
     base = (base or "").strip().rstrip("/")
-    if base and not base.endswith("/v1"):
-        base += "/v1"
+    if base:
+        parsed = urlparse(base)
+        if (parsed.scheme not in ("http", "https") or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.query or parsed.fragment):
+            raise ValueError("Base URL 必须是无凭据、无查询参数的 http/https 地址")
+        if not base.endswith("/v1"):
+            base += "/v1"
     return base
 
 
 def load_local_config() -> dict[str, str]:
     """Read Base URL / API Key from this machine only. Never from the plugin package."""
-    out: dict[str, str] = {}
+    sources: list[dict[str, str]] = []
     for path in (USER_LOCAL, PLUGIN_ROOT / "local.json"):
         if not path.is_file():
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             continue
-        if not isinstance(data, dict):
-            continue
-        for k in ("base_url", "api_key", "model"):
-            v = data.get(k)
-            if isinstance(v, str) and v.strip() and k not in out:
-                out[k] = v.strip()
-    if not out.get("api_key"):
-        for env_name in ("IMAGE_EDIT_API_KEY", "GEILI_SUB2API_KEY", "OPENAI_API_KEY"):
-            v = os.environ.get(env_name, "").strip()
-            if v:
-                out["api_key"] = v
-                break
-    if not out.get("base_url"):
-        v = (os.environ.get("IMAGE_EDIT_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "").strip()
-        if v:
-            out["base_url"] = v
-    base = normalize_base(out.get("base_url", ""))
-    if base:
-        out["base_url"] = base
-    if not out.get("model"):
-        out["model"] = "gpt-image-2"
-    return out
+        if isinstance(data, dict):
+            sources.append({k: data[k].strip() for k in ("base_url", "api_key", "model")
+                            if isinstance(data.get(k), str) and data[k].strip()})
+    env_base = (os.environ.get("IMAGE_EDIT_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "").strip()
+    env_key = next((os.environ[name].strip() for name in
+                    ("IMAGE_EDIT_API_KEY", "GEILI_SUB2API_KEY", "OPENAI_API_KEY")
+                    if os.environ.get(name, "").strip()), "")
+    sources.append({"base_url": env_base, "api_key": env_key})
+    base = next((normalize_base(s["base_url"]) for s in sources if s.get("base_url")), "")
+    # Never merge a credential with a base from a different configuration source.
+    key = next((s["api_key"] for s in sources if s.get("api_key") and s.get("base_url")
+                and normalize_base(s["base_url"]) == base), "")
+    model = next((s["model"] for s in sources if s.get("model")), "gpt-image-2")
+    return {"base_url": base, "api_key": key, "model": model}
+
+
+def resolve_credentials(fields: dict[str, Any]) -> tuple[str, str]:
+    local = load_local_config()
+    base = normalize_base(str(fields.get("base_url") or "") or local.get("base_url", ""))
+    key = str(fields.get("api_key") or "").strip()
+    if not key and base and base == local.get("base_url"):
+        key = local.get("api_key", "")
+    return base, key
 
 
 def log(msg: str) -> None:
@@ -340,7 +349,20 @@ def _ipv4_first_addrinfo(*args: Any, **kwargs: Any):
 
 
 socket.getaddrinfo = _ipv4_first_addrinfo  # type: ignore[assignment]
-_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+def _origin(url: str) -> tuple[str, str, int]:
+    parsed = urlparse(url)
+    return parsed.scheme.lower(), (parsed.hostname or "").lower(), parsed.port or (443 if parsed.scheme == "https" else 80)
+
+
+class _SameOriginRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if _origin(req.full_url) != _origin(newurl):
+            raise urllib.error.HTTPError(newurl, 403, "Cross-origin authenticated redirect blocked", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SameOriginRedirect())
 
 
 def _transient(exc: BaseException) -> bool:
@@ -369,7 +391,7 @@ def http_json(method: str, url: str, api_key: str, body: bytes | None = None, co
         headers["Content-Type"] = content_type
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
     last_exc: BaseException | None = None
-    attempts = 3 if method.upper() == "GET" else 2
+    attempts = 3 if method.upper() == "GET" else 1
     for i in range(attempts):
         try:
             with _OPENER.open(req, timeout=timeout) as resp:
@@ -439,8 +461,8 @@ def _find_video_url(obj: Any) -> str | None:
 
 # --- video jobs -------------------------------------------------------------
 
-VIDEO_DIR = PLUGIN_ROOT / "outputs"
-VIDEO_DIR.mkdir(exist_ok=True)
+VIDEO_DIR = STATE_ROOT / "outputs"
+VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 VIDEO_JOBS: dict[str, dict[str, Any]] = {}
 VIDEO_JOBS_LOCK = threading.Lock()
 VIDEO_POLL_INTERVAL = 4.0
@@ -459,7 +481,7 @@ def video_job_log(job_id: str, msg: str) -> None:
 
 def _video_download(job_id: str, base: str, key: str, upstream_id: str, parsed: Any) -> None:
     """Fetch the finished video: try /videos/{id}/content first, then any URL in the payload."""
-    data, ctype = b"", ""
+    data, ctype, st = b"", "", 0
     if upstream_id:
         url = join_url(base, "/videos/%s/content" % upstream_id)
         st, data, ctype = http_bytes(url, key, timeout=300)
@@ -469,10 +491,8 @@ def _video_download(job_id: str, base: str, key: str, upstream_id: str, parsed: 
         if not url2:
             video_job_update(job_id, status="failed", error="任务完成但拿不到视频文件（/content 失败且响应里没有可下载的 URL）")
             return
-        st, data, ctype = http_bytes(url2, key, timeout=300)
-        if st != 200 or not data:
-            video_job_update(job_id, status="failed", error="视频下载失败 HTTP %s" % st)
-            return
+        data, ctype = fetch_public_bytes(url2, max_bytes=100 * 1024 * 1024,
+                                         timeout=300, content_types=("video/", "application/octet-stream"))
     name = "%s.mp4" % job_id
     (VIDEO_DIR / name).write_bytes(data)
     video_job_log(job_id, "saved %s bytes=%d ctype=%s" % (name, len(data), ctype))
@@ -486,15 +506,18 @@ def _video_worker(job_id: str, base: str, key: str, model: str, prompt: str, siz
         status, parsed, text = http_json(
             "POST", join_url(base, "/videos"), key, body=body, content_type="application/json", timeout=60
         )
-        video_job_log(job_id, "submit /videos status=%s resp=%s" % (status, json.dumps(parsed, ensure_ascii=False)[:600]))
+        video_job_log(job_id, "submit /videos status=%s" % status)
 
-        if status not in (200, 201, 202):
-            # Fallback: some gateways only expose the synchronous /videos/generations route.
+        if status not in (200, 201, 202) and status not in (404, 405):
+            video_job_update(job_id, status="failed", error="提交失败或受理状态未知 HTTP %s；未自动重发" % status)
+            return
+        if status in (404, 405):
+            # Fallback only when the server explicitly rejects this endpoint.
             video_job_update(job_id, phase="submit_sync")
             status2, parsed2, _ = http_json(
                 "POST", join_url(base, "/videos/generations"), key, body=body, content_type="application/json", timeout=300
             )
-            video_job_log(job_id, "submit /videos/generations status=%s resp=%s" % (status2, json.dumps(parsed2, ensure_ascii=False)[:600]))
+            video_job_log(job_id, "submit /videos/generations status=%s" % status2)
             if status2 not in (200, 201, 202):
                 video_job_update(
                     job_id,
@@ -530,7 +553,7 @@ def _video_worker(job_id: str, base: str, key: str, model: str, prompt: str, siz
             st, pj, _ = http_json("GET", join_url(base, "/videos/%s" % upstream_id), key, timeout=30)
             if st != 200:
                 fails += 1
-                video_job_log(job_id, "poll status=%s resp=%s (fails=%d)" % (st, json.dumps(pj, ensure_ascii=False)[:200], fails))
+                video_job_log(job_id, "poll status=%s (fails=%d)" % (st, fails))
                 if fails >= 5:
                     video_job_update(job_id, status="failed", error="轮询任务状态连续失败 HTTP %s" % st)
                     return
@@ -565,7 +588,8 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "image-edit/0.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        log("%s - %s" % (self.address_string(), fmt % args))
+        code = args[1] if len(args) > 1 else "-"
+        log("%s - %s %s status=%s" % (self.address_string(), self.command, urlparse(self.path).path, code))
 
     def _send(self, code: int, body: bytes, content_type: str, extra: dict[str, str] | None = None) -> None:
         self.send_response(code)
@@ -587,7 +611,27 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("请求体过大")
         return self.rfile.read(n) if n else b""
 
+    def _guard(self) -> bool:
+        """Same-origin fence for every request.
+
+        Host 必须是环回地址：DNS rebinding 会把恶意页面的 Host 变成攻击者域名，
+        在这里直接拒绝。带 Origin 的请求（跨站 fetch 一定带）必须同源，
+        浏览器同源 GET 不带 Origin，不受影响。
+        """
+        host = (self.headers.get("Host") or "").strip().lower()
+        port = self.server.server_address[1]
+        if host not in (f"127.0.0.1:{port}", f"localhost:{port}"):
+            self._json(403, {"ok": False, "error": "Host 校验失败：仅接受 127.0.0.1 访问"})
+            return False
+        origin = (self.headers.get("Origin") or "").strip().rstrip("/")
+        if origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
+            self._json(403, {"ok": False, "error": "Origin 校验失败：跨站请求已拒绝"})
+            return False
+        return True
+
     def do_GET(self) -> None:
+        if not self._guard():
+            return
         parsed = urlparse(self.path)
         path = parsed.path
         if path in ("/", "/index.html"):
@@ -598,7 +642,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, index.read_bytes(), "text/html; charset=utf-8")
             return
         if path == "/health" or path == "/status":
-            self._json(200, {"ok": True, "running": True, "pid": os.getpid(), "port": self.server.server_address[1]})
+            self._json(200, {"ok": True, "running": True, "service": "image-edit-canvas",
+                             "pid": os.getpid(), "port": self.server.server_address[1]})
             return
         if path == "/api/engines":
             public = {}
@@ -610,12 +655,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/defaults":
             cfg = load_local_config()
+            # 安全红线：api_key 只留在服务端（环境变量/local.json），绝不下发到页面。
+            # 页面需要知道的是"有没有配好"，不是 key 本身。
             self._json(
                 200,
                 {
                     "ok": True,
                     "base_url": cfg.get("base_url") or "",
-                    "api_key": cfg.get("api_key") or "",
+                    "has_key": bool(cfg.get("api_key")),
                     "model": cfg.get("model") or "gpt-image-2",
                     "source": str(USER_LOCAL) if USER_LOCAL.is_file() else "env",
                 },
@@ -653,23 +700,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"ok": False, "error": "仅支持 http/https 图片地址"})
                 return
             try:
-                req = urllib.request.Request(
-                    url, method="GET",
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36"},
-                )
-                with _OPENER.open(req, timeout=30) as resp:
-                    data = resp.read(20 * 1024 * 1024 + 1)
-                if len(data) > 20 * 1024 * 1024:
-                    self._json(400, {"ok": False, "error": "图片超过 20MB"})
-                    return
-                ctype = resp.headers.get("Content-Type", "image/png")
-                if not ctype.startswith("image/"):
-                    self._json(400, {"ok": False, "error": "该地址不是图片（%s）" % ctype[:60]})
-                    return
+                data, ctype = fetch_public_bytes(url)
+                with Image.open(io.BytesIO(data)) as downloaded:
+                    downloaded.load()
                 self._send(200, data, ctype)
-            except Exception as e:
-                log("fetch-url failed %s -> %s" % (url[:120], e))
-                self._json(502, {"ok": False, "error": "下载失败：%s" % e})
+            except UnsafeDownload as e:
+                self._json(400, {"ok": False, "error": str(e)})
+            except Exception:
+                log("fetch-url download failed")
+                self._json(502, {"ok": False, "error": "图片下载或解码失败"})
             return
         if path.startswith("/files/"):
             name = _FILE_SAFE.sub("", path[len("/files/"):])
@@ -711,6 +750,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b"not found", "text/plain")
 
     def do_POST(self) -> None:
+        if not self._guard():
+            return
         parsed = urlparse(self.path)
         path = parsed.path
         try:
@@ -754,9 +795,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_test(self) -> None:
         body = self._json_body()
-        local = load_local_config()
-        base = normalize_base(str(body.get("base_url") or "") or local.get("base_url", ""))
-        key = str(body.get("api_key") or "") or local.get("api_key", "")
+        base, key = resolve_credentials(body)
         if not base or not key:
             self._json(400, {"ok": False, "error": "需要 base_url 和 api_key"})
             return
@@ -770,9 +809,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api_models(self) -> None:
         body = self._json_body()
-        local = load_local_config()
-        base = normalize_base(str(body.get("base_url") or "") or local.get("base_url", ""))
-        key = str(body.get("api_key") or "") or local.get("api_key", "")
+        base, key = resolve_credentials(body)
         if not base or not key:
             self._json(400, {"ok": False, "error": "需要 base_url 和 api_key"})
             return
@@ -791,8 +828,7 @@ class Handler(BaseHTTPRequestHandler):
         log("edit fields=%s files=%s" % (redact(fields), [(f["name"], f["filename"], len(f["data"])) for f in files]))
 
         local = load_local_config()
-        base = normalize_base((fields.get("base_url") or "").strip() or local.get("base_url", ""))
-        key = (fields.get("api_key") or "").strip() or local.get("api_key", "")
+        base, key = resolve_credentials(fields)
         engine_id = (fields.get("engine") or "gpt").strip() or "gpt"
         engine = ENGINES.get(engine_id) or ENGINES["gpt"]
         model = (fields.get("model") or local.get("model") or engine.get("i2i_model") or "gpt-image-2").strip()
@@ -930,21 +966,21 @@ class Handler(BaseHTTPRequestHandler):
 
         status, parsed, text = http_json("POST", url, key, body=payload, content_type=content_type, timeout=UPSTREAM_TIMEOUT)
         if status != 200:
-            log("edit upstream status=%s resp=%s" % (status, json.dumps(parsed, ensure_ascii=False)[:600]))
+            log("edit upstream status=%s" % status)
         if status == 502:
             self._json(
                 200,
                 {
                     "ok": False,
                     "status": 502,
-                    "retry": True,
-                    "error": "502 Upstream access forbidden：瞬时上游故障，不是请求写坏了。直接重试。",
+                    "retry": False,
+                    "error": "上游返回 502，受理状态可能未知；请先核对任务或账单，不要直接重复生成。",
                     "upstream": parsed,
                 },
             )
             return
         if status != 200:
-            self._json(200, {"ok": False, "status": status, "error": parsed or text, "retry": status in (429, 502, 503)})
+            self._json(200, {"ok": False, "status": status, "error": parsed or text, "retry": False})
             return
 
         # Collect every returned image; upstreams answer with data[] for n>1.
@@ -968,7 +1004,7 @@ class Handler(BaseHTTPRequestHandler):
                 elif u:
                     raw_items.append(("url", str(u)))
         if not raw_items:
-            log("edit upstream 200 without images resp=%s" % json.dumps(parsed, ensure_ascii=False)[:600])
+            log("edit upstream 200 without images")
             self._json(200, {"ok": False, "status": status, "error": "上游没有 b64_json 也没有可用 url", "upstream": parsed})
             return
 
@@ -977,11 +1013,10 @@ class Handler(BaseHTTPRequestHandler):
             b64 = val
             if kind == "url":
                 try:
-                    with urllib.request.urlopen(val, timeout=60) as resp:
-                        raw_img = resp.read()
+                    raw_img, _mime = fetch_public_bytes(val, timeout=60)
                     b64 = base64.b64encode(raw_img).decode("ascii")
-                except Exception as e:
-                    log("edit url download failed %s -> %s" % (val[:120], e))
+                except Exception:
+                    log("edit result download failed")
                     continue
             try:
                 out_im = open_image(base64.b64decode(b64))
@@ -1018,6 +1053,13 @@ class Handler(BaseHTTPRequestHandler):
         base = normalize_base(str(body.get("base_url") or ""))
         key = str(body.get("api_key") or "").strip()
         model = str(body.get("model") or "").strip()
+        if not key and USER_LOCAL.is_file():
+            try:
+                existing = json.loads(USER_LOCAL.read_text(encoding="utf-8"))
+                if isinstance(existing, dict) and base == normalize_base(str(existing.get("base_url") or "")):
+                    key = str(existing.get("api_key") or "")
+            except (OSError, ValueError):
+                pass
         if base:
             cfg["base_url"] = base
         if key:
@@ -1027,15 +1069,24 @@ class Handler(BaseHTTPRequestHandler):
         if not cfg:
             self._json(400, {"ok": False, "error": "没有可保存的字段"})
             return
-        USER_LOCAL.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        import tempfile
+        USER_LOCAL.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=".image-edit.", suffix=".tmp", dir=USER_LOCAL.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fp:
+                json.dump(cfg, fp, ensure_ascii=False, indent=2)
+                fp.flush()
+                os.fsync(fp.fileno())
+            os.replace(tmp, USER_LOCAL)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
         log("save-defaults updated %s (api_key length=%d)" % (", ".join(sorted(cfg)), len(key)))
         self._json(200, {"ok": True, "path": str(USER_LOCAL), "saved": sorted(cfg)})
 
     def _api_video(self) -> None:
         body = self._json_body()
-        local = load_local_config()
-        base = normalize_base(str(body.get("base_url") or "") or local.get("base_url", ""))
-        key = str(body.get("api_key") or "") or local.get("api_key", "")
+        base, key = resolve_credentials(body)
         model = str(body.get("model") or "").strip()
         prompt = str(body.get("prompt") or "").strip()
         size = str(body.get("size") or "1280x720").strip()

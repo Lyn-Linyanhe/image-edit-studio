@@ -43,7 +43,8 @@ def test_resize_keeps_alpha_stroke():
     mask.putpixel((1, 1), (255, 0, 0, 255))
     im2, m2 = resize_pair(img, mask, (20, 20), "stretch")
     out = paint_red(im2, m2, invert=False)
-    reds = sum(1 for p in out.getdata() if p == (255, 0, 0))
+    raw = out.tobytes()  # getdata() 在 Pillow 14 起移除；按字节扫描 RGB 三元组
+    reds = sum(1 for i in range(0, len(raw), 3) if raw[i:i + 3] == b"\xff\x00\x00")
     if reds < 1:
         raise SystemExit("FAIL stretch resize dropped the stroke")
 

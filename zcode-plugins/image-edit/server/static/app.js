@@ -24,7 +24,18 @@
     rectStart: null,
     selectedRect: null,
     dragRect: null,
+    serverHasKey: false,
+    serverBase: "",
   };
+
+  function normalizedBase(base) {
+    const clean = (base || "").trim().replace(/\/+$/, "");
+    return clean && !clean.endsWith("/v1") ? clean + "/v1" : clean;
+  }
+  function connectionReady() {
+    return Boolean($("baseUrl").value.trim() && ($("apiKey").value.trim()
+      || (state.serverHasKey && normalizedBase($("baseUrl").value) === state.serverBase)));
+  }
 
   // 中转站计费（元/张）：gpt 1k=0.03 2k=0.08 4k=0.1；grok 1k=0.05 2k=0.08 4k=0.1
   const PRICE = {
@@ -93,11 +104,16 @@
       const r = await fetch("/api/defaults");
       const j = await r.json();
       if (!j.ok) return;
+      state.serverHasKey = Boolean(j.has_key);
+      state.serverBase = normalizedBase(j.base_url);
       if (!$("baseUrl").value && j.base_url) $("baseUrl").value = j.base_url;
-      if (!$("apiKey").value && j.api_key) $("apiKey").value = j.api_key;
+      // 安全：服务端只给 has_key 布尔值，绝不下发 api_key 本体。
+      // 页面 key 留空时，服务端提交会自动回退到本机配置的 key（/api/edit 已实现）。
       if (!$("model").value && j.model) $("model").value = j.model;
-      if (j.base_url || j.api_key) {
-        setStatus($("connStatus"), "已从本机配置填入接口（可改）。点「测试」验证连通。");
+      if (j.has_key) {
+        setStatus($("connStatus"), "服务端已配置 API Key（页面留空即可）。点「测试」验证连通。");
+      } else if (j.base_url) {
+        setStatus($("connStatus"), "已从本机配置填入 Base URL。请在页面填写 API Key 后点「测试」。");
       }
     } catch {}
   }
@@ -701,7 +717,7 @@
     const isT2I = tab === "t2i";
     const item = current();
     if (!isT2I && !item) { setStatus($("runStatus"), "先选一张内容图", "err"); return; }
-    if (!$("baseUrl").value || !$("apiKey").value) {
+    if (!connectionReady()) {
       setStatus($("runStatus"), "先填 Base URL 和 API Key", "err"); return;
     }
     if (!$("prompt").value.trim()) {
@@ -715,7 +731,7 @@
       }
     }
     $("btnRun").disabled = true;
-    setStatus($("runStatus"), "提交中…上游可能要等一会儿。502 就再点一次。");
+    setStatus($("runStatus"), "提交中…上游可能要等一会儿。超时或 5xx 后先核对任务/账单，避免重复扣费。");
     try {
       const fd = new FormData();
       fd.set("base_url", $("baseUrl").value.trim());
@@ -775,7 +791,7 @@
 
   $("btnRunVideo").onclick = async () => {
     saveSettings();
-    if (!$("baseUrl").value || !$("apiKey").value) {
+    if (!connectionReady()) {
       setStatus($("vStatus"), "先填 Base URL 和 API Key", "err"); return;
     }
     if (!$("vModel").value.trim()) { setStatus($("vStatus"), "先填视频模型名（可点「获取模型列表」看有哪些）", "err"); return; }

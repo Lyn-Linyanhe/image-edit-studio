@@ -17,18 +17,21 @@ from mcp.server.fastmcp import FastMCP
 
 PLUGIN_ROOT = Path(os.environ.get("IMAGE_EDIT_PLUGIN_ROOT") or Path(__file__).resolve().parents[1])
 SERVER_SCRIPT = PLUGIN_ROOT / "server" / "mask_edit_app.py"
-PID_FILE = PLUGIN_ROOT / ".image-edit.pid"
-LOG_FILE = PLUGIN_ROOT / "server.log"
-DEFAULT_PORT = int(os.environ.get("IMAGE_EDIT_PORT") or "8000")
+STATE_ROOT = Path(os.environ.get("IMAGE_EDIT_STATE_DIR") or PLUGIN_ROOT)
+PID_FILE = STATE_ROOT / ".image-edit.pid"
+LOG_FILE = STATE_ROOT / "server.log"
+DEFAULT_PORT = 8000
+_PROBE_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 mcp = FastMCP("image-edit")
+_CHILDREN: dict[int, subprocess.Popen] = {}
 
 
-def _port() -> int:
-    try:
-        return int(os.environ.get("IMAGE_EDIT_PORT") or DEFAULT_PORT)
-    except ValueError:
-        return DEFAULT_PORT
+def _port(value: int = 0) -> int:
+    port = int(value or os.environ.get("IMAGE_EDIT_PORT") or DEFAULT_PORT)
+    if not 1 <= port <= 65535:
+        raise ValueError("Port must be between 1 and 65535")
+    return port
 
 
 def _url(port: int | None = None) -> str:
@@ -73,13 +76,16 @@ def _probe(port: int, timeout: float = 1.5) -> dict:
     url = "http://127.0.0.1:%d/health" % port
     try:
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", "replace")
+        with _PROBE_OPENER.open(req, timeout=timeout) as resp:
+            raw = resp.read(4097).decode("utf-8", "replace")
             try:
                 body = json.loads(raw)
             except json.JSONDecodeError:
                 body = {"raw": raw}
-            return {"ok": resp.status == 200, "status": resp.status, "body": body}
+            valid = (resp.status == 200 and isinstance(body, dict)
+                     and body.get("service") == "image-edit-canvas"
+                     and body.get("port") == port and isinstance(body.get("pid"), int))
+            return {"ok": valid, "status": resp.status, "body": body}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -112,8 +118,12 @@ def _spawn(port: int) -> int:
         kwargs["close_fds"] = False
     else:
         kwargs["start_new_session"] = True
-    proc = subprocess.Popen(**kwargs)
-    return proc.pid
+    try:
+        proc = subprocess.Popen(**kwargs)
+        _CHILDREN[port] = proc
+        return proc.pid
+    finally:
+        log_fp.close()
 
 
 def _wait_up(port: int, timeout_s: float = 25.0) -> dict:
@@ -125,16 +135,6 @@ def _wait_up(port: int, timeout_s: float = 25.0) -> dict:
             return last
         time.sleep(0.25)
     return last or {"ok": False, "error": "启动超时"}
-
-
-def _kill(pid: int) -> None:
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True)
-        return
-    try:
-        os.kill(pid, 15)
-    except OSError:
-        pass
 
 
 def status_payload() -> dict:
@@ -164,7 +164,7 @@ def image_edit_status() -> str:
 @mcp.tool()
 def image_edit_ensure(port: int = 0) -> str:
     """Start the local canvas server if it is not already up. Does not open a browser."""
-    p = int(port) if port else _port()
+    p = _port(port)
     st = status_payload()
     if st["running"] and st["port"] == p:
         return json.dumps({"ok": True, "already": True, **st}, ensure_ascii=False, indent=2)
@@ -179,10 +179,11 @@ def image_edit_ensure(port: int = 0) -> str:
             ensure_ascii=False,
             indent=2,
         )
+    if st["pid_alive"] and not st["running"]:
+        return json.dumps({"ok": False, "error": "记录的进程仍存在但服务身份未确认；没有重复启动"}, ensure_ascii=False)
     try:
-        sock = socket.socket()
-        sock.bind(("127.0.0.1", p))
-        sock.close()
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", p))
     except OSError:
         probe = _probe(p)
         if probe.get("ok"):
@@ -193,6 +194,7 @@ def image_edit_ensure(port: int = 0) -> str:
     out = {
         "ok": bool(wait.get("ok")),
         "spawned_pid": pid,
+        "service_pid": wait.get("body", {}).get("pid"),
         "port": p,
         "url": _url(p),
         "probe": wait,
@@ -226,18 +228,30 @@ def image_edit_stop() -> str:
     """Stop the local canvas server. The next ensure/open will start a new process."""
     st = status_payload()
     pid = st.get("pid")
-    stopped = False
-    if pid:
-        _kill(int(pid))
-        stopped = True
+    body = st.get("probe", {}).get("body", {})
+    if not st.get("running") or not pid or body.get("pid") != pid:
+        return json.dumps({"ok": not bool(st.get("running") or st.get("pid_alive")),
+                           "stopped": False, "note": "服务归属未确认，没有终止任何进程", "before": st},
+                          ensure_ascii=False, indent=2)
     try:
-        if PID_FILE.exists():
-            PID_FILE.unlink()
-    except OSError:
-        pass
-    time.sleep(0.3)
-    after = status_payload()
-    return json.dumps({"ok": True, "stopped": stopped, "before": st, "after": after}, ensure_ascii=False, indent=2)
+        req = urllib.request.Request(st["url"].rstrip("/") + "/stop", data=b"", method="POST")
+        with _PROBE_OPENER.open(req, timeout=5) as response:
+            response.read(4096)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and _probe(st["port"], timeout=0.3).get("ok"):
+            time.sleep(0.1)
+        after = status_payload()
+        if not after["running"]:
+            child = _CHILDREN.pop(st["port"], None)
+            if child:
+                try:
+                    child.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    _CHILDREN[st["port"]] = child
+        return json.dumps({"ok": not after["running"], "stopped": not after["running"],
+                           "before": st, "after": after}, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        return json.dumps({"ok": False, "stopped": False, "error": str(exc)}, ensure_ascii=False)
 
 
 def main() -> None:
