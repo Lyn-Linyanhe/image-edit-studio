@@ -1,0 +1,231 @@
+{
+  "style_id": "mantu-sage-watercolor-girl",
+  "source": {
+    "folder": "",
+    "image_count": 13,
+    "resolution": [1200, 1600],
+    "aspect_ratio": "3:4",
+    "consistency": "同一作者同一系列，风格高度统一"
+  },
+  "one_line": "高调、极低饱和的水彩彩铅手绘日系插画：纯白纸上蓬松长发少女的居中学生半身像，抱书或文件夹，视线落在画外，铅笔断线勾轮廓，水彩极淡晕染，画面无黑无重影。",
+  "transfer_scope": {
+    "rule": "只迁移手法，不迁移配色（铁律 A）——目标图里每个元素自己的颜色一律不动：黄发保持黄发，不会因为基准图是红色/银灰/灰紫而改变。除非使用者明确声明要换某个元素的颜色。",
+    "transferable": [
+      "媒介与笔触：水彩淡涂 + 铅笔断线 + 彩铅草稿感",
+      "线稿：断续、粗细变化、收笔出锋、叠线重描、轮廓不闭合",
+      "上色：淡水彩洗笔、边界渗染、轻微溢出线外、扫笔擦痕、柔边",
+      "色彩处理强度：饱和度压到约 0.085、明度抬高、对比压低",
+      "明暗：压成三档、无黑、暗部下限抬到明度 0.35 以上、无落地投影、无体积光",
+      "光影逻辑：正面偏上方柔和散射光、极软光质",
+      "材质：边缘柔、无噪点无颗粒无贴图纹理",
+      "细节密度：碎发与睫毛细致、衣料与背景概括",
+      "氛围：安静温柔内敛带书卷气、空气感"
+    ],
+    "not_transferable": [
+      "任何固有色相（头发、眼睛、肤色、衣物、道具、背景色相族一律保持目标图原样）",
+      "基准图的 10 色色板（仅作描述性证据，不是迁移目标）",
+      "暗部用灰紫、高光用纸白、腮红 #F4D7DA 这类色相决定（改为从目标图各元素自身色相派生）",
+      "银灰/墨色/蓝紫长发、蓬松碎发造型、眼下小痣与雀斑",
+      "抱笔记本与扶手动作、圆框眼镜、水手服/针织毛衣/西装",
+      "3:4 单人半身居中构图、纯白纸底",
+      "作者署名水印（不得复制）"
+    ]
+  },
+  "medium": {
+    "category": "日系动漫插画 / 少女半身立绘",
+    "technique": "数字作画模拟水彩淡涂 + 彩铅铅笔线稿",
+    "not": ["3D渲染", "厚涂CG", "赛璐璐平涂", "写实摄影", "矢量插画"],
+    "finish": "故意保留草稿感：断线、收笔出锋、叠线重描、色块溢出线外",
+    "volume_shading": "无体积渲染，靠线稿结构与淡色分层塑形，不靠阴影"
+  },
+  "subject": {
+    "cast": "单人年轻女性（16-24岁，学生/白领气质），无配角",
+    "hair": {
+      "shape": "蓬松凌乱长发，碎发飞扬，发梢外翻",
+      "variants": ["松马尾+缎带蝴蝶结", "低马尾", "双丸子头", "高马尾", "披发", "短发"],
+      "measured_mean_hex": "#AAA6B1",
+      "notes": "发色全为低饱和灰调，明度区间 0.50-0.76，不存在黑发与鲜艳染发"
+    },
+    "face": {
+      "eyes": "大眼，浓密分束上翘睫毛，瞳孔渐变+细小星状高光，眼白面积小，眼型微下垂",
+      "blush": { "hex": "#F4D7DA", "saturation": "0.103-0.149", "value": "0.92-0.98", "coverage": "13/13 张均有" },
+      "marks": "眼下小痣/雀斑"
+    },
+    "wardrobe": "素色大块面：针织高领毛衣、oversize开衫、白衬衫、西装外套、水手服、露肩T恤、黑色高领；无印花无图案",
+    "props": ["笔记本", "文件夹", "信封", "铅笔", "圆框眼镜", "复古拨号电话", "蛋糕", "棒棒糖"],
+    "prop_motif": "学业 / 办公室 / 校园",
+    "hands": "手部必须入画并占据胸前区域，与道具构成三角/矩形结构（13/13）",
+    "environment": "无场景，纯白纸底，无房间/家具/环境元素"
+  },
+  "composition": {
+    "framing": "胸像 / 半身像",
+    "subject_position": "绝对居中；脸部位于画幅上半部中央偏上（约纵向1/3处）",
+    "head_tilt_deg": [10, 20],
+    "shoulders": "倾斜，接近平视但不做正面正脸",
+    "crop": "头顶距上缘 3-8%，下缘裁切在腰/髋部",
+    "white_space": {
+      "pure_white_gt_0_97": 0.425,
+      "paper_white_gt_0_94": 0.51
+    },
+    "depth": "几乎无景深，无透视，层次仅由线稿遮挡与淡色叠压表达",
+    "gaze": "8/13 望向画外，5/13 与观者对视（含 2 张单眼 wink）"
+  },
+  "palette": {
+    "structure": "从纸白到深灰紫的连续灰阶，非鲜艳色组合",
+    "role": "⚠️ 仅作描述性证据（说明'饱和度 0.085'这一手法水平的外观表现），不是迁移目标。改图时不得把此色板写进 prompt。",
+    "global_top10": [
+      { "hex": "#F2EBED", "share": 0.141, "lum": 0.928, "role": "纸白/高光/白衬衫" },
+      { "hex": "#E3DEE3", "share": 0.128, "lum": 0.876, "role": "浅灰底/肌肤过渡" },
+      { "hex": "#D5CFD6", "share": 0.114, "lum": 0.819, "role": "浅灰紫（发梢/布料受光）" },
+      { "hex": "#C3BFC3", "share": 0.106, "lum": 0.755, "role": "中性浅灰（布料中间调）" },
+      { "hex": "#A3A0AB", "share": 0.105, "lum": 0.633, "role": "灰紫（头发主体/阴影灰）" },
+      { "hex": "#B3B0B7", "share": 0.101, "lum": 0.696, "role": "中性灰紫" },
+      { "hex": "#9190A1", "share": 0.101, "lum": 0.570, "role": "蓝灰（外套/文件夹）" },
+      { "hex": "#857F93", "share": 0.089, "lum": 0.510, "role": "灰紫深调（发底/暗部）" },
+      { "hex": "#787084", "share": 0.073, "lum": 0.452, "role": "深灰紫" },
+      { "hex": "#635B70", "share": 0.041, "lum": 0.369, "role": "全组最深调（暗部极限）" }
+    ],
+    "variants": {
+      "A_sage_cream": {
+        "images": ["187DAFA4", "1A37F95C", "47EC32AC", "C8BE3C31", "EB7D536A"],
+        "colors": ["#F0E9E6", "#DAD3D4", "#BAB7B2", "#9FA09B", "#7D7C77"],
+        "sat_mean": "0.032-0.045",
+        "note": "100% 内容像素 S<0.12；肉眼读作鼠尾草绿，实测近乎中性灰，绿色仅存于色相（绿相占比 13-34%）"
+      },
+      "B_lavender_violet": {
+        "images": ["32A9A9E0", "8B2352CD", "A290AB88", "FD7AB5A7"],
+        "colors": ["#E4DAE7", "#C2B9D0", "#A89DBA", "#877A96", "#6A607F"],
+        "deepest": "#584F64",
+        "sat_mean": "0.079-0.148",
+        "note": "紫罗兰色相占比 73-98%"
+      },
+      "C_navy_graphite": {
+        "images": ["57A891F1", "78A4D684", "B325823A", "E2E34618"],
+        "colors": ["#E5E5F0", "#CCCCDB", "#ABACBB", "#8C90A3", "#696775"],
+        "sat_mean": "0.101-0.131",
+        "note": "蓝色相占比 81-96%"
+      }
+    },
+    "signals": {
+      "blush_lip": { "hex": "#F4D7DA", "sat": [0.103, 0.149], "rule": "唯一允许的低饱和暖色，13/13 存在" },
+      "accent_prop": {
+        "usage": "13 张中仅 2 张出现，面积占画布 0.39%-1.05%",
+        "examples": [{ "hex": "#AB737E", "what": "复古红电话", "image": "78A4D684" }, { "hex": "#ED9AA8", "what": "草莓", "image": "E2E34618" }],
+        "rule": "整幅灰调里只点一个暖色小道具，面积 <1.5%"
+      }
+    }
+  },
+  "color_metrics": {
+    "content_saturation_mean": 0.085,
+    "content_saturation_p90": 0.14,
+    "content_value_mean": 0.744,
+    "content_value_std": 0.147,
+    "lum_p05": 0.523,
+    "lum_p95": 0.995,
+    "contrast_range_p95_minus_p05": 0.471,
+    "darkest_pixel_range": [0.166, 0.320],
+    "pixels_below_lum_0_20_pct": 0.0001,
+    "hue_family_share": { "purple_violet": 0.282, "blue": 0.266, "red_pink": 0.199, "green": 0.09, "orange_brown": 0.06, "magenta_pink": 0.057, "yellow": 0.047, "cyan_teal": 0.0 },
+    "lab_a_star_mean": 3.74,
+    "lab_b_star_mean": -4.42,
+    "lab_b_star_by_variant": { "A_sage_cream": 1.61, "B_lavender_violet": -7.96, "C_navy_graphite": -8.42 },
+    "lab_note": "自实现 CIE Lab(D65)，用标准参考值自检(analyze_style.py --selftest, 偏差<0.005)。不要用 PIL convert('LAB')：实测其 a*/b* 不可靠（纯白得 a*=b*=-128，纯红得 (-47,-58) 而正确值约 (+80,+67)）。初版据此得出的 b*=+25.25 已作废。"
+  },
+  "lighting": {
+    "source": "单一柔和散射光，正面偏上方约 45°",
+    "quality": "极软，无硬边投影/镜面高光/体积光/光晕",
+    "levels": "白 → 浅灰 → 中灰，仅三层",
+    "cast_shadow": "无（主体直接贴在白纸底上）",
+    "hair_highlight": "留白 + 浅色笔触提亮，呈丝状洗笔痕",
+    "forbidden": ["黑", "深阴影", "彩色环境光"]
+  },
+  "texture": {
+    "lineart": { "type": "铅笔细线", "color_range": ["#4E455A", "#74716F"], "traits": ["断续", "粗细变化", "收笔出锋", "叠线重描", "轮廓不闭合"], "never": "纯黑线" },
+    "coloring": ["水彩洗笔式淡涂", "边界模糊渗染", "轻微溢出线外", "明显扫笔与擦痕", "留白当色"],
+    "hair_texture": "成束扫笔而非逐根描线，发梢分叉外翘，碎发用极细单根线勾出",
+    "skin": "平涂 + 极浅过渡，脸颊鼻尖柔粉晕染",
+    "fabric": "褶皱只用少量淡笔触暗示，无布纹、无图案、无金属反光",
+    "detail_density_sobel": { "min": 1.99, "max": 3.58, "mean": 2.89, "driver": "碎发数量，而非线稿粗细" },
+    "sharpness": "整体柔，边缘不锐利；无噪点、无胶片颗粒、无纹理贴图"
+  },
+  "mood": {
+    "primary": ["安静", "温柔", "内敛", "忧郁", "眷恋", "书卷气"],
+    "mechanism": {
+      "空/静": "42.5% 纯白留白，无场景",
+      "温柔/呼吸感": "低饱和 0.085 + 高调明度 0.744 + 低对比 0.471",
+      "手绘温度": "铅笔断线 + 水彩渗染 + 扫笔擦痕",
+      "少女感": "大眼 + 睫毛 + 奶粉腮红 #F4D7DA + 眼下小痣",
+      "疏离/心事": "8/13 视线画外，侧身 + 头部倾角 10-20°",
+      "叙事钩子": "单件道具暗示未说出的情境",
+      "不沉重": "画面无黑无深阴影"
+    },
+    "forbidden_moods": ["暗黑哥特", "赛博霓虹", "浓艳少女漫", "高饱和糖果色"]
+  },
+  "hard_constraints": [
+    "不要黑色：最暗值明度 ≥ 0.30，暗部用 #635B70 / #787084 灰紫替代",
+    "不要深阴影：无落地投影，明暗跨度 ≤ 约 0.5",
+    "饱和度上限约 0.15；唯一例外是占画布 <1.5% 的暖色道具",
+    "背景必须是纯白纸，不用渐变/色块/虚化场景/粒子光斑纹理",
+    "必须保留铅笔断线与水彩渗染，不能磨成赛璐璐或厚涂",
+    "必须 3:4 竖幅、单人半身、居中；不做全身/群像/横构图",
+    "手与道具必须入画",
+    "饰品至多各一件，不堆砌",
+    "不要复制原作者署名"
+  ],
+  "transfer_recipe": {
+    "chosen_path": "方案一 / 1A —— 只迁移渲染风格(笔触+配色+提亮抬暗部)，保留目标图的构图、人物与背景结构；暗部整体抬到明度 >=0.35，画面不留黑",
+    "alternative": "1B 半风格：只换笔触与配色，保留目标图明暗结构（放弃'无黑'达标线）；方案二：连构图一起迁移成白底单人半身，见 img2img_方案.md 文末附录",
+    "background_rule": "方案一不换背景：只做简化+提亮+去饱和+概括化，不得替换/挪动/删除已有背景元素，不得新增环境元素",
+    "negative_prompt_warning": "常规风格负向里的 detailed background / scenery / room / gradient background 方案一不能用——负向无法区分'不要新增'与'删掉已有的'，会把目标图背景一起抹掉",
+    "hue_preservation": {
+      "why": "纯提示词守不住铁律 A——模型会顺手把目标图发色换成基准图色板的银灰/灰紫（上次已实测翻车）",
+      "how": "post-process: python style-distill/preserve_hue.py --style-output <生成图> --original <原目标图> -o <输出>",
+      "mechanism": "CIE Lab 内重组：L(明暗结构) <- 生成图；h(色相) <- 原图（不变）；C(彩度) <- 原图 × sat-scale（方向不动，只改浓淡）",
+      "sat_scale_default": 1.0,
+      "sat_scale_note": "默认 1.0 = 完全保留原图饱和度（最贴合'不换配色'）。要同时拿 1A 的低饱和手法就调小；脚本会算出目标值（例：原图 0.105 时压到 0.085 需 0.81）。这是唯一需要决定'手法要不要盖过原图色彩'的地方。",
+      "verified": ["Lab 往返自检偏差 0.0000/255", "恒等测试: 最大像素差 0/255, 100% 像素相同, 色相偏差 0.00 度"],
+      "limitation": "色相取自原图同位置像素，几何有位移时会错位——实测把 78A4(藏青+红电话) 的色相套到 1A37 的明暗结构上，红电话的红色错位糊到下巴与手臂。几何吻合时(方案一+ControlNet, denoise 0.35-0.5)可直接用；有位移时调大 --chroma-blur (建议 3-8px)；位移很大时此步不适用。"
+    },
+    "structure_lock": "ControlNet lineart/softedge，权重 0.6-0.8",
+    "denoise": { "illustration_input": [0.35, 0.5], "photo_input": [0.55, 0.75], "full_regeneration": [0.75, 0.85] },
+    "cfg": [5, 7],
+    "style_anchor": "IPAdapter 权重 0.6-0.8 或风格 LoRA；纯提示词难以压住低饱和高调特征",
+    "sampler": "DPM++ 2M 或 Euler a，步数 25-35",
+    "warning": "CFG 过大会把对比度拉回来并产生脏灰"
+  },
+  "discrimination_test": {
+    "method": "把 2 张本风格图与 1 张异风格图(compose/style_ref.png，带深色场景背景的柔和厚涂插画)一起送进 analyze_style.py 对比",
+    "results": {
+      "this_style_187DAF": { "paper_white": 0.503, "lum_p05": 0.579, "val_mean": 0.770, "content_sat": 0.035, "edge": 3.06, "b_star": 1.98 },
+      "this_style_FD7AB5": { "paper_white": 0.520, "lum_p05": 0.387, "val_mean": 0.603, "content_sat": 0.144, "edge": 2.46, "b_star": -9.66 },
+      "foreign_style_ref": { "paper_white": 0.006, "lum_p05": 0.291, "val_mean": 0.496, "content_sat": 0.077, "edge": 1.98, "b_star": 3.67 }
+    },
+    "conclusion": "低饱和不是判别特征（异风格 0.077 夹在本风格 0.035 与 0.144 之间）；b* 与笔触密度也无判别力。真正有判别力的是：纯白留白占比（0.446-0.624 vs 0.006）、最暗值下限（亮度 P05>=0.35）、整体明度（>=0.60）。",
+    "do_not_verify_by": ["内容饱和度", "b* 色温", "笔触密度"]
+  },
+  "acceptance_checklist": [
+    "固有色相未被改动：目标图每个元素（头发/眼睛/肤色/衣物/道具/背景）的颜色与色相族保持原样",
+    "未出现把画面整体往灰紫/蓝灰靠的调色（hue shift / palette swap）",
+    "未被执行成去色或黑白",
+    "亮度 P05 >= 0.35，且最暗像素明度 >= 0.15（本风格实测最暗 0.166-0.320）",
+    "内容区域明度均值 >= 0.60",
+    "画面里找不到黑（12/13 张亮度 <0.20 的像素占比为 0）",
+    "线稿有断线与叠加重描",
+    "色块边界有水彩渗染与外溢",
+    "背景结构未被替换/挪动/删除，仅被简化提亮",
+    "角色身份未漂移：发型、配件、肩线角度、五官比例与原图一致",
+    "内容饱和度 <= 0.15 —— 辅助项，不作为判别依据",
+    "纯白(>0.97)占比 >= 0.35 —— 仅方案二适用，方案一保背景结构故不适用",
+    "3:4 竖幅、单人、半身、居中 —— 仅方案二适用"
+  ],
+  "artifacts": {
+    "report": "style-distill/漫画风格蒸馏.md",
+    "prompts": "style-distill/style_prompt.md",
+    "transfer_plan": "style-distill/img2img_方案.md",
+    "stats": "style-distill/style_stats.json",
+    "darkness": "style-distill/darkness_check.json",
+    "palette_image": "style-distill/palette.png",
+    "verifier": "python style-distill/analyze_style.py <folder> -o style-distill/new_stats.json",
+    "hue_guard": "python style-distill/preserve_hue.py --style-output <gen> --original <orig> -o <out>"
+  }
+}

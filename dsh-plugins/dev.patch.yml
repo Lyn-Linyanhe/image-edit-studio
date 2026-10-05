@@ -1,0 +1,14 @@
+# Dev-only overlay: mounts dsh-image-edit into the web profile WITHOUT editing
+# the profile's package.json or cordis.patch.yml.
+#
+#   dsh --profile web --patch <this file> --dump-config
+#   dsh --profile web --patch <this file>
+#
+# Remove this file from the command line to remove the plugin from the boot.
+- insert:
+    - id: image-edit
+      # 运行前把 <工作区> 换成你的仓库绝对路径（dev 叠加层要求 file:// 绝对地址）。
+      name: 'file:///<工作区>/dsh-plugins/dsh-image-edit/lib/index.js'
+      config:
+        url: 'http://127.0.0.1:8000'
+        label: '改图'

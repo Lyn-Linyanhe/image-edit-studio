@@ -1,0 +1,96 @@
+# ══════════════════════════════════════════════════════════════════
+#  图生图内容总站 · 版本控制范围
+# ══════════════════════════════════════════════════════════════════
+#  纳入：代码 / 文档 / 提示词  +  不可再生的唯一存世证据
+#  排除：大体量输入图  +  脚本可再生的派生图 / 日志 / 缓存
+#
+#  依据与逐条复核过程见  `移动说明.md` 的
+#  「2026-09-19 复核：绝对路径逐条验证」章节。
+#  范围决策：2026-09-19 与用户确认，取「代码+关键证据」方案（约 3 MB）。
+#
+#  注意：本仓库只做版本控制，**不是备份**。139 MB 输入图与下列被排除的
+#  图片均不在版本控制内，需要另行做第二份拷贝。
+# ══════════════════════════════════════════════════════════════════
+
+# ── 1. 图片与派生数据：默认全部排除 ──────────────────────────────
+*.png
+*.jpg
+*.jpeg
+*.npy
+
+# ── 2. 例外：唯一存世证据（禁止排除）───────────────────────────
+# 这两组裁切图的源图 187DAFA4….jpg / 47EC32AC….jpg 已丢失，
+# 无法通过任何脚本再生，是那 13 张丢失源图的唯一记录。
+# 注意：这两个目录的父目录未被排除，故此处的 ! 例外才会生效
+#      （git 无法重新纳入「父目录已被排除」的文件）。
+!style-distill/target/pose_ref/*.png
+!style-distill/target/pose_ref2/*.png
+
+# ── 3. 大体量输入图（139 MB，按毫秒时间戳命名）──────────────────
+图生图用/
+
+# ── 4. 生成产出目录（已核实内部全为图片）───────────────────────
+# 末尾斜杠表示只匹配目录，故不会误伤同名的 compose/deliver.py
+产图/
+compose/images/out/
+compose/out/
+compose/out2/
+compose/final/
+compose/final2/
+compose/deliver/
+compose/diag/
+
+# ── 5. 可由脚本再生的裁切图 ─────────────────────────────────────
+#   make_target_crops.py -> style-distill/target/crops     (源 target.png 在)
+#   make_r1_crops.py     -> style-distill/target/r1/crops  (源 output_r1.jpg 在)
+style-distill/target/crops/
+style-distill/target/r1/crops/
+
+# ── 6. 运行时产物 / 缓存 / 手工备份 ─────────────────────────────
+# *.bak 是 git 之前的手工备份做法（如 mask_edit_app.py.bak），
+# 现由版本历史取代，故排除。
+# 调用台账（R1）：每次调用追加一条，属运行日志——不进库，否则每跑一次都会弄脏工作区
+style-distill/round_lib/call_ledger.jsonl
+__pycache__/
+*.pyc
+*.log
+*.bak
+*.pid
+
+# ===== 收敛后追加（2026-09-20）=====
+# 生成结果与中间产物：二进制大文件不进版本库；成品路径见各 round 的 README.md
+style-distill/round_manga/*.png
+style-distill/round_manga/work/
+style-distill/round_manga/checks/
+style-distill/round_manga/input/
+style-distill/round_manga/ref_xiami/
+style-distill/round_snow/*.png
+style-distill/round_snow/work/
+style-distill/round_snow/input/
+
+# 缓存与备份（_backup_* 里是被刻意移出仓库的原件，一律不进库）
+__pycache__/
+*.py[cod]
+*.bak
+style-distill/_backup_*/
+style-distill/_probe/
+style-distill/target/
+style-distill/target_t2/
+style-distill/_b_*.bin
+style-distill/_encprobe.txt
+# ZCode 侧的「输入」索引：由 zcode-image-edit/zcode_inputs.py 按本机存储生成，含机器相关路径
+style-distill/round_lib/user_inputs_zcode.json
+# ZCode 客户端自己的状态：每会话一份计划文件（plan-<sessionId>.md），不是本项目的交付物
+.zcode/
+# zimage 任务状态、manifest 与临时 Job 目录（不是源码/交付物）
+.zimage/
+# 编辑器本机设置，不进入仓库
+.vscode/
+# Python 字节码缓存
+**/__pycache__/
+*.pyc
+# zimage 运行时 Job 状态/manifest/中间文件（每次任务单独目录，非源码）
+.zimage/
+.vscode/
+# ZCode helper / local test artifacts
+.zcodeignore

@@ -1,0 +1,20 @@
+STYLE TRANSFER of an existing character design. Same specific instance, not a redesign. Do not reinterpret, simplify or restyle any face, accessory or garment feature.
+
+CORE LOCK
+- Framing: half-length, 2:3 vertical, figure on the LEFT two-thirds, crown near the top edge, cut off at the waist. No added room, no re-centring, no zoom-in on the head.
+- Pose: face turned to the viewer's LEFT and tilted DOWN; only the LEFT eye fully drawn, the RIGHT eye clipped by the cheek at the frame's left edge. Do NOT symmetrise the face.
+- The near (viewer-left) shoulder is BARE and forward, the shoulder line sloping down-left; the torso turns AWAY from the viewer.
+- Hair: pale ash, low saturation, NOT warm/red/golden. Long curtain down the frame's left, a thick gathered hank past the shoulder on the right, one strand crossing the chest.
+
+ACCESSORIES - the ones a generator collapses first, keep them separate:
+- Flower ornament on the character's LEFT temple (frame-right): FOUR star-shaped flowers, spaced apart and overlapping pairwise, NOT one rosette. Two of them throw long slender petals down-left and down-right; that protruding silhouette is the cluster's signature.
+- Feather earring on the LEFT ear, hanging down the frame-right side in front of the hair, vertical, to mid-neck: pale blue base, bright cyan middle, deeper blue tip. It is BELOW and LEFT of the flower cluster. Two separate objects - never merge them, never hang the flower from the earring.
+- Blue "X" hairpin in the bangs, LEFT of the flower cluster.
+- Choker: TWO tiers - a row of white star/knot motifs above, dense BLACK beadwork below. Keep both tiers; do not reduce to a ribbon or a single chain.
+- Thin black chain sweeping below the choker with one bright CYAN gem pendant on the chest.
+- Dress: white off-shoulder slip with a sheer lace overlay - that shoulder bare and unsleeved, thin strap with a small silver star ornament, semi-transparent floral/star lace across the chest, white seamed cuff from mid-upper arm.
+
+STYLE: anime digital illustration with painterly cel shading; expressive variable-width linework tapering to sharp points; flat graphic shadow shapes with crisp boundaries and short transitions; selective warm ivory highlights; subtle directional brush texture; selective fine detail at eyes, jewellery and flowers; clean shapes, crisp edges, coherent lighting.
+COLOUR: crimson-and-ivory is the style's palette but applies to LIGHTING, SHADOW STRUCTURE and BACKGROUND only. Character's local colours are fixed - pale ash hair, blue eyes, white dress, cyan gem. Never re-grade the character toward the style's dominant hue.
+
+NEGATIVE: photorealism; 3D rendering; uniform-width linework; heavy airbrushing; thick impasto; heavy grain; uniform microdetail; blur; neon grading; jpeg artifacts; watermark; text; muddy colours; cluttered background. No element from the style reference - none of its characters, props, motifs or subject colours. No warm/red/golden hair. Do not merge the flower with the feather.

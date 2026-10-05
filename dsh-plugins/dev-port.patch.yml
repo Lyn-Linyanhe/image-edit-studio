@@ -1,0 +1,33 @@
+# Test-only overlay: make a SECOND web instance bootable while the user's live
+# GUI keeps running.
+#
+# Two collisions found by actually booting it:
+#  1. webserver port is pinned to 3080 by the profile -> EADDRINUSE
+#  2. @linxin666/dsh-client-ui-task-board takes an exclusive lock on its ledger
+#     ("task-board ledger is already owned by process N") -> boot aborts
+#
+# Both are avoided here. This file is used ONLY for the plugin mount test; the
+# user's real profile is untouched.
+
+# 1. move the webserver off 3080 (a patch replaces the row's whole config)
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  config:
+    host: '127.0.0.1'
+    port: 8099
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024
+
+# 2. release the profile-level single-instance locks for this test instance
+- id: ui-task-board
+  name: '@linxin666/dsh-client-ui-task-board'
+  disabled: true
+
+- id: deja
+  name: dsh-deja
+  disabled: true
+
+- id: dsh-market
+  name: dshmarket
+  disabled: true

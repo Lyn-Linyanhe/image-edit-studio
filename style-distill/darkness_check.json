@@ -1,0 +1,119 @@
+[
+  {
+    "file": "187DAFA4",
+    "lum_min": 0.231,
+    "lum_p01": 0.46,
+    "darkest_hex": "#3B3B3B",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.068,
+    "pure_white_pct": 41.9
+  },
+  {
+    "file": "1A37F95C",
+    "lum_min": 0.256,
+    "lum_p01": 0.481,
+    "darkest_hex": "#414340",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.032,
+    "pure_white_pct": 43.7
+  },
+  {
+    "file": "32A9A9E0",
+    "lum_min": 0.263,
+    "lum_p01": 0.395,
+    "darkest_hex": "#423750",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.109,
+    "pure_white_pct": 51.6
+  },
+  {
+    "file": "47EC32AC",
+    "lum_min": 0.306,
+    "lum_p01": 0.49,
+    "darkest_hex": "#4F4D4E",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.012,
+    "pure_white_pct": 41.6
+  },
+  {
+    "file": "57A891F1",
+    "lum_min": 0.239,
+    "lum_p01": 0.392,
+    "darkest_hex": "#3C3B40",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.161,
+    "pure_white_pct": 38.9
+  },
+  {
+    "file": "78A4D684",
+    "lum_min": 0.289,
+    "lum_p01": 0.427,
+    "darkest_hex": "#4B464C",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.059,
+    "pure_white_pct": 42.9
+  },
+  {
+    "file": "8B2352CD",
+    "lum_min": 0.227,
+    "lum_p01": 0.393,
+    "darkest_hex": "#3C2F43",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.198,
+    "pure_white_pct": 50.1
+  },
+  {
+    "file": "A290AB88",
+    "lum_min": 0.32,
+    "lum_p01": 0.435,
+    "darkest_hex": "#54475A",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.003,
+    "pure_white_pct": 41.6
+  },
+  {
+    "file": "B325823A",
+    "lum_min": 0.305,
+    "lum_p01": 0.455,
+    "darkest_hex": "#424661",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.001,
+    "pure_white_pct": 45.6
+  },
+  {
+    "file": "C8BE3C31",
+    "lum_min": 0.238,
+    "lum_p01": 0.455,
+    "darkest_hex": "#3E3F39",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.126,
+    "pure_white_pct": 35.6
+  },
+  {
+    "file": "E2E34618",
+    "lum_min": 0.268,
+    "lum_p01": 0.446,
+    "darkest_hex": "#393F55",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.019,
+    "pure_white_pct": 35.0
+  },
+  {
+    "file": "EB7D536A",
+    "lum_min": 0.238,
+    "lum_p01": 0.438,
+    "darkest_hex": "#3D4039",
+    "pixels_below_0.2": 0.0,
+    "pixels_below_0.35": 0.13,
+    "pure_white_pct": 38.8
+  },
+  {
+    "file": "FD7AB5A7",
+    "lum_min": 0.166,
+    "lum_p01": 0.333,
+    "darkest_hex": "#2E242D",
+    "pixels_below_0.2": 0.001,
+    "pixels_below_0.35": 1.976,
+    "pure_white_pct": 45.2
+  }
+]

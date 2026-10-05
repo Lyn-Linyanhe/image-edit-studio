@@ -1,0 +1,134 @@
+{
+ "cutoff_session": "session-05d8fe01-e83",
+ "paths": [
+  "style-distill/round_arcade/input/A_pose_env.png",
+  "style-distill/round_arcade/input/B_char_style.png"
+ ],
+ "excluded": [
+  {
+   "name": "914e99ecbf456a39e7da89b13538b01a.jpg",
+   "width": "1200",
+   "height": "1200",
+   "bytes": "218525"
+  },
+  {
+   "name": "1789699540113.png",
+   "width": "1200",
+   "height": "1542",
+   "bytes": "1730730"
+  },
+  {
+   "name": "image.png",
+   "width": "1200",
+   "height": "1200",
+   "bytes": "1211113"
+  },
+  {
+   "name": "image.png",
+   "width": "1200",
+   "height": "1542",
+   "bytes": "1673455"
+  },
+  {
+   "name": "image.png",
+   "width": "1200",
+   "height": "1542",
+   "bytes": "1985460"
+  },
+  {
+   "name": "image.png",
+   "width": "1200",
+   "height": "1542",
+   "bytes": "1828813"
+  },
+  {
+   "name": "884997cea3065d938b750e1be0c25ae2.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1501134"
+  },
+  {
+   "name": "image.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1480503"
+  },
+  {
+   "name": "image.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1520172"
+  },
+  {
+   "name": "image.png",
+   "width": "579",
+   "height": "522",
+   "bytes": "345124"
+  },
+  {
+   "name": "1789699568626.png",
+   "width": "1200",
+   "height": "1542",
+   "bytes": "1927395"
+  },
+  {
+   "name": "fef1e70172b92306cc4a8874741b1509.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1456487"
+  },
+  {
+   "name": "out_r7.png",
+   "width": "1024",
+   "height": "1024",
+   "bytes": "1634679"
+  },
+  {
+   "name": "1789224470480.png",
+   "width": "1200",
+   "height": "1348",
+   "bytes": "2046178"
+  },
+  {
+   "name": "1789604902823.png",
+   "width": "1200",
+   "height": "998",
+   "bytes": "940016"
+  },
+  {
+   "name": "image.png",
+   "width": "1596",
+   "height": "1224",
+   "bytes": "2276382"
+  },
+  {
+   "name": "image.png",
+   "width": "1519",
+   "height": "1197",
+   "bytes": "2406937"
+  },
+  {
+   "name": "image.png",
+   "width": "1311",
+   "height": "1230",
+   "bytes": "1982038"
+  },
+  {
+   "name": "c1dc05a287896769311f364517a30509_720.jpg",
+   "width": "1200",
+   "height": "1600",
+   "bytes": "330478"
+  }
+ ],
+ "unreachable": [
+  "1789699540113.png",
+  "image.png",
+  "image.png",
+  "image.png",
+  "image.png",
+  "884997cea3065d938b750e1be0c25ae2.png",
+  "image.png",
+  "image.png",
+  "image.png"
+ ]
+}

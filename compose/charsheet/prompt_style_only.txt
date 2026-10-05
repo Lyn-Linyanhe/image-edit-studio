@@ -1,0 +1,16 @@
+Restyle this image. The composition, pose, posture, face, hands, hair, silhouette, framing, camera angle and every accessory stay EXACTLY as they are. Do not redraw the figure, do not re-pose it, do not move or add or remove any object. Only the RENDERING STYLE changes.
+
+CHANGE ONLY THESE:
+- Line quality: thin, clean, near-black variable-width contours that thicken where forms overlap and taper to sharp points at hair tips and cloth edges.
+- Shading logic: replace soft gradients with flat graphic shadow shapes that have crisp boundaries and only short transition zones; keep the existing shadow placement and light direction.
+- Highlights: small warm ivory accents on the lit edges of hair, cheek and dress.
+- Texture: subtle short directional brush strokes inside large flat colour areas; detail concentrated at the eyes, jewellery and flowers.
+- Background: render it in the style's palette and brushwork, in flatter graphic shapes, keeping the same shapes and layout it already has.
+- Overall grading: crimson-red and warm ivory accents, near-black outlines, strong light-dark contrast, crisp edges, coherent lighting.
+
+KEEP UNCHANGED:
+- The character's local colours: pale ash hair stays pale ash, eyes stay blue, dress stays white, gem stays cyan. Do not re-grade the character toward the style's dominant hue; apply the crimson-and-ivory palette to the LIGHTING and BACKGROUND only.
+- Every accessory in its exact existing position and shape: the four star-shaped flowers on the temple, the blue feather earring, the blue "X" hairpin, the two-tier choker with black beadwork, the thin chain with the cyan gem pendant, the sheer lace dress and the seamed cuff.
+- The figure's position in frame and its size in frame.
+
+NEGATIVE: photorealism; 3D rendering; uniform-width linework; heavy airbrushing; thick impasto; heavy grain; uniform microdetail; blur; neon grading; jpeg artifacts; watermark; text; muddy colours; cluttered background; changes to the pose, body orientation, face angle, limb position or accessory placement; any element from the style reference image - none of its characters, props, motifs or subject colours.
