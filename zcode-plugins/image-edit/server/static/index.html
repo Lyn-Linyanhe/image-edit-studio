@@ -24,7 +24,7 @@
     button, input, select, textarea { font: inherit; color: inherit; }
     button { cursor: pointer; }
     .app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; height: 100%; }
-    .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+    .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); position: relative; }
     .tabs, .toolbar, .side { background: var(--panel); }
     .tabs { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
     .tab {
@@ -57,6 +57,12 @@
     .stack canvas { display: block; max-width: none; }
     #view { position: absolute; inset: 0; }
     #paint { position: absolute; inset: 0; cursor: crosshair; }
+    .ann-editor {
+      position: absolute; z-index: 20; display: none; min-width: 140px; max-width: 280px;
+      background: #12151c; border: 1px solid var(--accent-2); border-radius: 8px;
+      padding: 6px 8px; color: var(--text); box-shadow: 0 8px 24px #0008;
+    }
+    .ann-editor.show { display: block; }
     .canvas-wrap.dragging::after {
       content: "松手把图片放进画布";
       position: absolute; inset: 12px; z-index: 10;
@@ -100,6 +106,17 @@
     }
     .gallery .gitem.active { border-color: var(--accent-2); }
     .gallery .gitem img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .versions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .versions .vitem {
+      min-width: 64px; height: 72px; border-radius: 8px; overflow: hidden; border: 2px solid transparent;
+      background: #0c0e13; padding: 0; position: relative;
+    }
+    .versions .vitem.active { border-color: var(--accent-2); }
+    .versions .vitem img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .versions .vitem .vlbl {
+      position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; text-align: center;
+      background: #000a; color: #fff; padding: 1px 0;
+    }
     .result video { width: 100%; border-radius: 8px; background: #000; }
     .price { font-size: 12px; color: var(--warn); margin-top: 8px; min-height: 1.3em; }
     .brush { width: 110px; }
@@ -179,6 +196,8 @@
           <button class="btn" id="btnFillAll">全填</button>
           <button class="btn" id="btnClearMask">清空</button>
           <button class="btn" id="btnInvert">反选</button>
+          <button class="btn" id="btnUndo" title="Ctrl+Z" disabled>撤销</button>
+          <button class="btn" id="btnRedo" title="Ctrl+Y" disabled>重做</button>
           <button class="btn" id="btnFit">适应窗口</button>
         </div>
         <div class="group">
@@ -190,6 +209,7 @@
           <span class="hint" id="imgMeta">还没有图</span>
         </div>
       </div>
+      <input id="annEditor" class="ann-editor" autocomplete="off" placeholder="这块要改成什么" />
       <div class="canvas-wrap" id="wrap">
         <div class="stage-banner" id="genBanner">
           <div class="big">文生图模式</div>
@@ -285,6 +305,7 @@
                 <option value="9:16">9:16</option>
                 <option value="3:2">3:2</option>
                 <option value="2:3">2:3</option>
+                <option value="match">与当前图相同</option>
               </select>
             </div>
             <div>
@@ -363,6 +384,8 @@
 
       <div class="card result" id="cardResult">
         <h2>结果</h2>
+        <div class="hint" id="versionHint">原图一直留着。每次生成追加一版，点版本条切过去继续改。</div>
+        <div class="versions" id="versions"></div>
         <img id="outImg" alt="结果会显示在这里" title="点击全屏查看 · 长按可闪看原图" />
         <div class="gallery" id="gallery"></div>
         <div class="row" style="margin-top:8px">
