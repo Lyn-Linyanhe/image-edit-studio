@@ -184,5 +184,95 @@
     "url": "https://api.mikoto.vip/generated/66dc5e3d05219f0c02fedb2f3bee7de0.png",
     "status": "done",
     "ts": "2026-09-25 20:26:01"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\.zimage\\grok-verify\\formal-entry.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-ba5c28d8-dc3b-906b-b64c-6dde2be3c160-7ff1d277.jpeg",
+    "status": "done",
+    "ts": "2026-10-05 23:58:55"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v1.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-6a8898a9-a442-91c6-94b8-fc2e56ce1b3a-534d67e1.png",
+    "status": "done",
+    "ts": "2026-10-06 00:06:58"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v2-identity.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-e5b452df-0e36-907f-b7db-7cc40060a000-b717a18d.png",
+    "status": "done",
+    "ts": "2026-10-06 10:23:13"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v3-v1style.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-a45db0c4-eedc-90e1-8ef1-0a57f23fc187-3301662e.png",
+    "status": "done",
+    "ts": "2026-10-06 10:25:57"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v4-face-led.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-1a6d874c-431b-925b-a3f4-84d6a7b84816-585f0c6d.png",
+    "status": "done",
+    "ts": "2026-10-06 10:28:20"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v5-skill.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-b1a589c8-3415-94e7-9f17-1bd8c30b7d33-e403adb2.png",
+    "status": "done",
+    "ts": "2026-10-06 10:30:50"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v6-source-style.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-6a81bc51-7c98-9b89-9534-c45d124ec8b6-cb2fbcd2.png",
+    "status": "done",
+    "ts": "2026-10-06 10:35:22"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v7-clear.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-cfbe12c8-f7b1-91f5-a213-dc9505b7222e-2600822e.png",
+    "status": "done",
+    "ts": "2026-10-06 10:38:45"
+  },
+  {
+    "out": "C:\\Users\\typ\\Desktop\\mantu\\产图\\umbrella-grok-v8-clear-blocks.png",
+    "url": "https://imgen.x.ai/xai-imgen/xai-tmp-imgen-63347dde-ddef-9fbb-a76e-a43bbe73d4e2-4b5d5fe2.png",
+    "status": "done",
+    "ts": "2026-10-06 10:45:20"
+  },
+  {
+    "out": "产图\\umbrella-gpt25-sunburst-v8-clear-blocks.png",
+    "url": "https://v4-gateway-v3.fycsai.com/v1/images/assets/8db62be0-44d9-4079-8226-b0cc20b5c0fa",
+    "status": "done",
+    "ts": "2026-10-06 10:50:16"
+  },
+  {
+    "out": "产图\\style-extract-r9.png",
+    "url": "https://v4-gateway-v1.shyfai.cn/v1/images/assets/05e20fc9-8b8d-4ba1-9b4b-7922e6912f88",
+    "status": "pending",
+    "ts": "2026-10-06 11:14:12"
+  },
+  {
+    "out": "产图\\twostage-final.png",
+    "url": "https://v4-gateway-v3.fycsai.com/v1/images/assets/ede6d43e-2d41-44e5-953a-984841460937",
+    "status": "pending",
+    "ts": "2026-10-06 14:56:05"
+  },
+  {
+    "out": "产图\\sketch-final.png",
+    "url": "https://v4-gateway-v1.shyfai.cn/v1/images/assets/439176f0-8771-4765-b6cc-a85de9037806",
+    "status": "done",
+    "ts": "2026-10-06 15:03:18"
+  },
+  {
+    "out": "产图\\sketch-final-b.png",
+    "url": "https://v4-gateway-v3.fycsai.com/v1/images/assets/924f5586-9a43-467f-9c73-89c221a0dc34",
+    "status": "done",
+    "ts": "2026-10-06 15:04:23"
+  },
+  {
+    "out": "产图\\sketch-final-finish.png",
+    "url": "https://v4-gateway-v3.fycsai.com/v1/images/assets/9759a918-89fc-441c-8e5e-3902f1ba48ac",
+    "status": "done",
+    "ts": "2026-10-06 15:08:05"
   }
 ]
