@@ -12,7 +12,7 @@
     images: [],
     refs: [],
     active: 0,
-    tool: "brush",
+    tool: "rect",
     brush: 36,
     drawing: false,
     last: null,
@@ -225,7 +225,7 @@
     }
     const fit = fitScale(item.img);
     state.fitScale = fit;
-    if (!state.viewScale) state.viewScale = fit;
+    if (!state.viewScale || state.viewScale === 1) state.viewScale = fit;
     const s = state.viewScale;
     state.displayScale = s;
     const w = Math.max(1, Math.round(item.img.naturalWidth * s));
@@ -597,12 +597,11 @@
     const el = $("annEditor");
     const r = item.rects[idx];
     if (!el || !r) return;
-    const box = paint.getBoundingClientRect();
-    const stage = document.querySelector(".stage").getBoundingClientRect();
+    const s = state.displayScale;
     el.value = r.text || "";
     el.dataset.idx = String(idx);
-    el.style.left = (box.left - stage.left + r.x * state.displayScale) + "px";
-    el.style.top = (box.top - stage.top + r.y * state.displayScale + r.h * state.displayScale + 6) + "px";
+    el.style.left = (r.x * s) + "px";
+    el.style.top = (r.y * s + r.h * s + 6) + "px";
     el.classList.add("show");
     el.focus();
     el.select();
@@ -669,28 +668,25 @@
       ev.preventDefault();
       return;
     }
-    if (ev.detail === 2) {
-      const { hit } = hitExistingRect(item, p);
-      if (hit >= 0) {
-        state.selectedRect = hit;
+    const { hit, handle } = hitExistingRect(item, p);
+    if (hit >= 0) {
+      hideAnnEditor();
+      state.selectedRect = hit;
+      const r = item.rects[hit];
+      if (ev.detail === 2) {
         redraw();
         placeAnnEditor(item, hit);
         ev.preventDefault();
         return;
       }
+      if (handle) state.resizeRect = { idx: hit, handle, ox: r.x, oy: r.y, ow: r.w, oh: r.h };
+      else state.dragRect = { idx: hit, dx: p.x - r.x, dy: p.y - r.y, ox: r.x, oy: r.y };
+      redraw();
+      ev.preventDefault();
+      return;
     }
     if (state.tool === "rect") {
       hideAnnEditor();
-      const { hit, handle } = hitExistingRect(item, p);
-      if (hit >= 0) {
-        state.selectedRect = hit;
-        const r = item.rects[hit];
-        if (handle) state.resizeRect = { idx: hit, handle, ox: r.x, oy: r.y, ow: r.w, oh: r.h };
-        else state.dragRect = { idx: hit, dx: p.x - r.x, dy: p.y - r.y, ox: r.x, oy: r.y };
-        redraw();
-        ev.preventDefault();
-        return;
-      }
       state.selectedRect = null;
       state.drawing = true;
       state.rectStart = p;
@@ -698,6 +694,8 @@
       ev.preventDefault();
       return;
     }
+    hideAnnEditor();
+    state.selectedRect = null;
     state.drawing = true;
     state.last = p;
     pushHistory(item);
