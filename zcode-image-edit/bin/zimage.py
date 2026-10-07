@@ -128,11 +128,12 @@ def _flush() -> None:
             pass
 
 
-def _run(argv: list[str], *, capture: bool = False, cwd: Path | None = None) -> tuple[int, str] | int:
+def _run(argv: list[str], *, capture: bool = False, cwd: Path | None = None,
+         env: dict | None = None) -> tuple[int, str] | int:
     _flush()
     if not capture:
-        return subprocess.call(argv, cwd=str(cwd) if cwd else None)
-    p = subprocess.Popen(argv, cwd=str(cwd) if cwd else None,
+        return subprocess.call(argv, cwd=str(cwd) if cwd else None, env=env)
+    p = subprocess.Popen(argv, cwd=str(cwd) if cwd else None, env=env,
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          text=True, encoding="utf-8", errors="replace", bufsize=1)
     chunks: list[str] = []
@@ -322,19 +323,49 @@ def _validate_refs(refs: list[str]) -> list[str]:
     return out
 
 
-def _classify_failure(output: str, rc: int) -> str:
-    low = output.lower()
-    if "moderation" in low or "审核" in output:
-        return "moderation_blocked"
-    if "401" in low or "api key" in low or "apikey" in low:
-        return "auth_error"
-    if "timeout" in low or "timed out" in low:
-        return "timeout"
-    if any(x in low for x in ("502", "503", "504")):
-        return "network_error"
-    if "解码" in output or "truncated" in low or "not an image" in low:
-        return "invalid_image"
-    return "unknown" if rc else "failed"
+def _transport_report(path: Path, *, marked: bool) -> dict:
+    sys.path.insert(0, str(APP.parent))
+    import image_transport as T
+    fallback = T.CallResult(phase="child_process", classification="child_report_missing",
+                            acceptance="unknown" if marked else "not_sent",
+                            submit_attempts=None if marked else 0).report()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        # An allowlist prevents a malformed child report leaking arbitrary strings.
+        phases = {"preflight", "submit", "read_response", "decode_response", "response",
+                  "submission_guard", "snapshot", "parse_response", "decode_image",
+                  "download", "result_pending", "saved", "recovery"}
+        classifications = {"not_sent", "missing_config", "local_error", "transport_error",
+                           "timeout", "response_interrupted", "invalid_response_encoding",
+                           "response_complete", "submission_already_marked", "snapshot_failed",
+                           "auth_error", "rate_limited", "request_rejected", "server_error",
+                           "http_error", "moderation_blocked", "invalid_json", "invalid_json_shape",
+                           "no_data", "no_image", "invalid_b64", "invalid_image", "output_exists",
+                           "download_unavailable", "download_failed", "local_result_error",
+                           "response_error", "url_pending", "saved", "cannot_recover_unknown"}
+        if data.get("phase") not in phases or data.get("classification") not in classifications:
+            return fallback
+        clean = {"phase": data["phase"], "classification": data["classification"],
+                 "acceptance": "not_sent" if data.get("acceptance") == "not_sent" else "unknown",
+                 "retryable_generation": False}
+        for name in ("http_status", "content_length", "received_bytes", "submit_attempts", "elapsed_s"):
+            value = data.get(name)
+            clean[name] = value if value is None or isinstance(value, (int, float)) else None
+        ctype = data.get("content_type")
+        clean["content_type"] = ctype if ctype in (None, "application/json", "text/json", "text/plain",
+                                                  "text/html", "application/octet-stream", "other") else "other"
+        return clean
+    except (OSError, ValueError, TypeError):
+        return fallback
+
+
+def _freeze_transport_env():
+    sys.path.insert(0, str(APP.parent))
+    import gen
+    env = dict(os.environ)
+    env.update(RELAY_API_KEY=gen.KEY, RELAY_API_KEY_HD=gen.KEY_HD,
+               RELAY_BASE_URL=gen.BASE, RELAY_MODEL=gen.MODEL)
+    return env
 
 
 PLAN_ARTIFACT_TYPE = "zimage.plan"
@@ -604,6 +635,22 @@ def cmd_plan(a) -> int:
 
 
 def cmd_edit(a) -> int:
+    recovering = bool(getattr(a, "recover_from", ""))
+    recovery_dir = None
+    if recovering:
+        recovery_dir = Path(a.recover_from).resolve()
+        if recovery_dir.is_file():
+            recovery_dir = recovery_dir.parent
+        try:
+            recipe = json.loads((recovery_dir / "recovery.private.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            print("FAILED: cannot_recover_unknown; no POST performed")
+            return 1
+        out, force, no_cache = a.out, a.force, a.no_cache
+        for name, value in recipe.items():
+            if name not in {"fn", "cmd", "recover_from", "out", "force", "no_cache"}:
+                setattr(a, name, value)
+        a.out, a.force, a.no_cache = out, force, no_cache
     if getattr(a, "plan_file", ""):
         allowed = {"--plan-file", "--out", "--dry-run", "--force", "--no-cache", "--job-id"}
         conflicts = {token.split("=", 1)[0] for token in sys.argv[2:]
@@ -644,12 +691,15 @@ def cmd_edit(a) -> int:
         if plan_request.get("endpoint_sha256") != R.sha256_text(_resolved_endpoint()):
             raise SystemExit("计划失效：endpoint 已变化")
 
-    job = _valid_job_id(a.job_id) if a.job_id else R.job_id()
-    jd = _job_dir(job)
+    job = recovery_dir.name if recovering else (_valid_job_id(a.job_id) if a.job_id else R.job_id())
+    jd = recovery_dir if recovering else _job_dir(job)
     manifest = jd / "manifest.json"
     print(f"  job_id  : {job}")
     print(f"  manifest: {manifest}")
-    _write_state(manifest, "created", job_id=job, source=str(image), status="created")
+    if not recovering:
+        _write_state(manifest, "created", job_id=job, source=str(image), status="created",
+                     submit_attempts=0, acceptance="not_sent", phase="preflight")
+    transport_env = _freeze_transport_env()
     try:
         plan = getattr(a, "plan_expected", None)
         if plan is not None:
@@ -660,7 +710,7 @@ def cmd_edit(a) -> int:
             estimated = plan.get("estimated_request_bytes")
             coverage = plan.get("coverage_target_ratio")
         else:
-            mask = _prepare_mask(a, image, jd / "mask.png")
+            mask = Path(a.mask_file) if recovering and a.mask_file else _prepare_mask(a, image, jd / "mask.png")
             ratio, warnings = _mask_summary(image, mask, protect=a.protect) if mask else (None, [])
             mask_primary = bool(mask and not a.protect and not getattr(a, "no_primary", False))
             fp = R.request_fingerprint(source=image, mask=mask, prompt=prompt_txt,
@@ -688,7 +738,7 @@ def cmd_edit(a) -> int:
                           request_fingerprint=fp, warnings=warnings)
         R.update_manifest(manifest, state="prepared", status="prepared")
 
-        cache = None if a.no_cache or a.dry_run else R.load_valid_cache(_cache_root(), fp)
+        cache = None if a.no_cache or a.dry_run or recovering else R.load_valid_cache(_cache_root(), fp)
         if cache is not None:
             cached_result = Path(cache["result_path"])
             cache_validation = cache.get("validation") or {"status": "PASS"}
@@ -702,16 +752,32 @@ def cmd_edit(a) -> int:
             note = "需语义复核" if final_status == "NEEDS_REVIEW" else "已验收"
             print(f"✓ 缓存命中：{fp} → {out}  （未发送上游；{note}）")
             return 0
-        if not a.dry_run and not _resolved_key():
-            R.update_manifest(manifest, state="blocked", status="auth_error", failure_type="auth_error")
+        if not recovering and not a.dry_run and not transport_env.get("RELAY_API_KEY"):
+            R.update_manifest(manifest, state="blocked", status="auth_error", failure_type="missing_config",
+                              phase="preflight", acceptance="not_sent", submit_attempts=0)
             print("✗ 未配置 RELAY_API_KEY —— 在花钱之前先停下。")
             return 2
 
-        temp_out = jd / "result.tmp.png"
+        sys.path.insert(0, str(APP.parent))
+        import image_transport as T
+        if not recovering:
+            recipe = {name: getattr(a, name) for name in (
+                "image", "prompt_file", "ref", "size", "quality", "pad", "encode", "jpg_quality",
+                "model", "budget_mib", "whole", "protect", "no_primary", "mask_file",
+                "rect", "polygon", "flood", "grabcut", "dilate")}
+            recipe.update(image=str(image), prompt="", prompt_file=str(prompt_file),
+                          mask_file=str(mask) if mask else "", dry_run=False, plan_file="")
+            T.private_snapshot(jd / "recovery.private.json", json.dumps(recipe))
+        temp_out = jd / ("recovered.tmp.png" if recovering else "result.tmp.png")
+        report_path = jd / ("recovery.transport.json" if recovering else "transport.json")
+        snapshot_path = jd / "response.private.json"
         argv = [PY, str(ROUND), "--content", str(image), "--prompt", str(prompt_file),
                 "--out", str(temp_out), "--size", a.size, "--quality", a.quality,
                 "--pad", a.pad, "--encode", a.encode, "--jpg-quality", str(a.jpg_quality),
-                "--budget-mib", str(a.budget_mib)]
+                "--budget-mib", str(a.budget_mib), "--transport-report", str(report_path),
+                "--snapshot", str(snapshot_path)]
+        if recovering:
+            argv += ["--recover-from", str(snapshot_path)]
         for r in a.ref:
             argv += ["--ref", r]
         if mask:
@@ -724,21 +790,19 @@ def cmd_edit(a) -> int:
             argv += ["--dry-run"]
         if a.model:
             argv += ["--model", a.model]
-        R.update_manifest(manifest, state="submitted", status="submitted",
-                          request_bytes=estimated, attempts=1)
-        rc, log = _run(argv, capture=True)
-        R.atomic_write_text(jd / "process.log", log)
-        retry_lines = [x for x in log.splitlines() if "发送第" in x and "/" in x]
-        if retry_lines:
-            import re as _re
-            nums = [_re.search(r"发送第\s+(\d+)/(\d+)", x) for x in retry_lines]
-            attempts = max((int(m.group(1)) for m in nums if m), default=1)
-            R.update_manifest(manifest, state="retrying", status="retrying", attempts=attempts)
+        R.update_manifest(manifest, state="prepared", status="prepared", request_bytes=estimated)
+        rc, log = _run(argv, capture=True, env=transport_env)
+        R.atomic_write_text(jd / ("recovery.process.log" if recovering else "process.log"), log)
+        report = _transport_report(report_path, marked=Path(str(temp_out) + ".submission").exists() or recovering)
+        R.update_manifest(manifest, transport=report, phase=report["phase"],
+                          acceptance=report["acceptance"], submit_attempts=report["submit_attempts"],
+                          retryable_generation=False, attempts=report["submit_attempts"], recovery=recovering)
         if a.dry_run:
-            R.update_manifest(manifest, state="prepared", status="plan_only", dry_run=True)
+            R.update_manifest(manifest, state="prepared", status="plan_only", dry_run=True,
+                              submit_attempts=0, acceptance="not_sent")
             return rc
         if rc != 0:
-            failure = _classify_failure(log, rc)
+            failure = report["classification"]
             R.update_manifest(manifest, state="blocked" if failure == "moderation_blocked" else "failed",
                               status=failure, failure_type=failure)
             return rc
@@ -794,16 +858,16 @@ def cmd_edit(a) -> int:
             cached = None
             cache_warning = f"缓存写入失败：{type(cache_error).__name__}: {cache_error}"
             print("⚠", cache_warning)
-        R.update_manifest(manifest, state="saved", status="saved", output=str(out),
-                          cache_stored=bool(cached), cache_warning=cache_warning)
+        R.update_manifest(manifest, state="saved", status=(validation or metrics or {}).get("status", "NEEDS_REVIEW"),
+                          output=str(out), cache_stored=bool(cached), cache_warning=cache_warning)
         print(f"✓ 结果原子写入：{out}  {im.size[0]}x{im.size[1]}  {out.stat().st_size / 1024:.0f} KB")
         return 0
     except BaseException as e:
-        if isinstance(e, SystemExit):
-            R.update_manifest(manifest, state="failed", status="failed", error=str(e))
-            raise
-        R.update_manifest(manifest, state="failed", status="failed", error=f"{type(e).__name__}: {e}")
-        raise
+        marked = any(jd.glob("*.submission"))
+        R.update_manifest(manifest, state="failed", status="local_error", failure_type="local_error",
+                          phase="outer_process", acceptance="unknown" if marked or recovering else "not_sent")
+        print("FAILED: local_error (safe diagnostic)")
+        return 1
 
 # ---------------------------------------------------------------- 本地服务
 
@@ -983,6 +1047,7 @@ def main() -> int:
     e.add_argument("--force", action="store_true", help="允许覆盖已有输出")
     e.add_argument("--no-cache", action="store_true", help="不读取或写入成功结果缓存")
     e.add_argument("--job-id", default="", help="显式指定可复现的 job id")
+    e.add_argument("--recover-from", default="", help="Job directory; local decode/URL GET only, never POST")
     e.set_defaults(fn=cmd_edit)
 
     pl = sub.add_parser("plan", help="只做本地预检与请求计划，不调用上游")

@@ -36,13 +36,11 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mask_edit_app as app
 
-BASE = app.env_cred("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
-KEY = app.env_cred("RELAY_API_KEY", "")
-# 第二个 key：高档（medium/high）用。没配就回退到 RELAY_API_KEY。
-# 实测（2026-09-25）：两个 key 在 geiliapi 上可见的模型**完全相同**，所以差异在配额/计费，
-# 不在模型权限——因此这里只是"按档位挑一个 key"，不做能力判断。
-KEY_HD = app.env_cred("RELAY_API_KEY_HD", "") or KEY
-MODEL = app.env_cred("RELAY_MODEL", "gpt-image-2")
+# Transport credentials are process-env only. Do not consult user config or registry.
+BASE = os.environ.get("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
+KEY = os.environ.get("RELAY_API_KEY", "")
+KEY_HD = os.environ.get("RELAY_API_KEY_HD", "") or KEY
+MODEL = os.environ.get("RELAY_MODEL", "gpt-image-2")
 
 
 def key_for(quality: str) -> str:
@@ -112,23 +110,33 @@ def require_config() -> None:
                 "https://image-direct.geiliapi.com/v1", "gpt-image-2"))
 
 
-def call(fields, files, timeout=900, key=None):
-    require_config()
-    bnd = ("----Gen" + uuid.uuid4().hex).encode()
-    body = app.build_multipart(fields, files, bnd)
-    req = urllib.request.Request(BASE + "/images/edits", data=body, method="POST")
-    req.add_header("Content-Type", f"multipart/form-data; boundary={bnd.decode()}")
-    # 用哪一个 key 由上游按档位决定（见 key_for）；不传则用默认 KEY
-    req.add_header("Authorization", "Bearer " + (key or KEY))
-    print(f"   sending {len(body):,} bytes ...")
+def call_structured(fields, files, timeout=900, key=None, *, marker=None,
+                    report_path=None, opener=None):
+    import image_transport as T
+    started = time.monotonic()
     try:
-        with urllib.request.urlopen(req, timeout=timeout,
-                                    context=ssl.create_default_context()) as r:
-            return r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
-    except Exception as e:
-        return -1, f"{type(e).__name__}: {e}"
+        selected = KEY if key is None else key
+        if not selected:
+            result = T.CallResult(classification="missing_config")
+            T.write_report(report_path, result)
+            return result
+        bnd = ("----Gen" + uuid.uuid4().hex).encode()
+        body = app.build_multipart(fields, files, bnd)
+        req = urllib.request.Request(BASE + "/images/edits", data=body, method="POST")
+        req.add_header("Content-Type", f"multipart/form-data; boundary={bnd.decode()}")
+        req.add_header("Authorization", "Bearer " + selected)
+    except Exception:
+        result = T.CallResult(classification="local_error",
+                              elapsed_s=round(time.monotonic() - started, 3))
+        T.write_report(report_path, result)
+        return result
+    return T.post_once(req, timeout=timeout, marker=marker,
+                       report_path=report_path, opener=opener)
+
+
+def call(fields, files, timeout=900, key=None):
+    """Compatible (status, text) interface; exactly one network invocation."""
+    return call_structured(fields, files, timeout=timeout, key=key).legacy()
 
 
 def main():
@@ -179,31 +187,39 @@ def main():
                   "size": a.size, "quality": a.quality}
         print(f"editable: {painted:.1f}% of frame")
 
-    t0 = time.time()
-    st, txt = call(fields, files)
-    print(f"   HTTP {st}   {time.time()-t0:.1f}s")
-
-    if st != 200:
-        print("FAILED:\n" + txt[:1200])
+    import image_transport as T
+    from pathlib import Path
+    out = Path(a.out or ("out_" + os.path.splitext(os.path.basename(a.image))[0] + ".png"))
+    report = str(out) + ".transport.json"
+    if out.exists():
+        print("FAILED: output_exists")
         return 1
-
-    d = json.loads(txt)
-    item = (d.get("data") or [{}])[0]
-    raw = None
-    if item.get("b64_json"):
-        raw = base64.b64decode(item["b64_json"])
-    elif item.get("url"):
-        with urllib.request.urlopen(item["url"], timeout=300,
-                                    context=ssl.create_default_context()) as r:
-            raw = r.read()
-    if not raw:
-        print("no image in response: " + txt[:500])
+    result = call_structured(fields, files, key=key_for(a.quality),
+                             marker=str(out) + ".submission", report_path=report)
+    if result.classification != "response_complete":
+        print("FAILED: " + result.classification)
         return 1
-
-    out = a.out or ("out_" + os.path.splitext(os.path.basename(a.image))[0] + ".png")
-    open(out, "wb").write(raw)
-    res = Image.open(io.BytesIO(raw)).convert("RGB")
-    print(f"\n   saved: {out}   {res.size}   {len(raw)//1024} KB")
+    T.private_snapshot(str(out) + ".response.private.json", result.text, secrets=(KEY, KEY_HD))
+    try:
+        item = T.result_item(result.text)
+        result.phase = "decode_image"
+        if item.get("b64_json"):
+            T.save_b64(item["b64_json"], out)
+        else:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "style-distill" / "round_lib"))
+            from run_round import download
+            result.phase = "download"
+            download(item["url"], out)
+    except T.ResultError as exc:
+        result.classification = str(exc)
+        T.write_report(report, result)
+        print("FAILED: " + result.classification)
+        return 1
+    result.phase = "saved"
+    result.classification = "saved"
+    T.write_report(report, result)
+    res = Image.open(out).convert("RGB")
+    print(f"\n   saved: {out}   {res.size}   {out.stat().st_size//1024} KB")
 
     # ---- numeric report (no human eye needed) ----
     ref = fit.convert("RGB")

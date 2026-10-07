@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""一轮作业的全流程一键跑：压缩 → 发送 → 重试 → curl 下载 → 体检。
+"""一轮作业：压缩 → 单次发送 → 安全取回 → 体检。
 
-替代此前每轮手写的七八步：
-  1) 按接口表单上限自动压低投喂体积（按"归一化到目标尺寸后"的真实字节判断，
-     因为 normalise_to_size 会把每张统一缩放到目标尺寸，按源分辨率压缩是无效的）；
-  2) 发送并对上传阶段的瞬时断连（SSL UNEXPECTED_EOF）自动重试；
-  3) 先打印结果 URL 再用 curl 下载（该 CDN 上 Python urllib 会挂死）；
-  4) 可选跑生成后体检。
+  1) 按归一化后的实际载荷判断投喂体积；
+  2) 生成 POST 只发一次，网络调用后的不确定失败不自动重发；
+  3) 完整响应保存私有快照，URL 下载仅 GET，最多三次且总预算 300 秒；
+  4) 结果完整解码后原子保存，可选继续生成后体检。
+
+传输 header 调整不是已证实的断流根因。
 
 用法：
   python run_round.py --content C.png --ref A.png [--ref B.png] \\
@@ -50,6 +50,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE.parent.parent / "compose" / "images"))
 import gen as G  # noqa: E402
+import image_transport as T  # noqa: E402
 from PIL import Image, ImageFilter  # noqa: E402
 
 CHECK = Path.home() / ".agents" / "skills" / "style-distill" / "scripts" / "audit_and_check.py"
@@ -119,97 +120,63 @@ def pick_reduction(content: Image.Image, refs: list[Image.Image],
 
 # ---------- 发送与下载 ----------
 
-def post_with_retry(fields: dict, files: dict, attempts: int = 3, timeout: int = 900,
+def post_with_retry(fields: dict, files: dict, attempts: int = 1, timeout: int = 900,
                     quality: str = "low"):
-    """发送，并对**传输层**瞬时失败自动重试。
-
-    ⚠ 2026-09-22 实测修正：原来的 try/except 是**死代码**——`gen.call` 自己不抛异常，
-    而是把任何异常吞成 `(-1, "类型: 消息")` 返回，所以模块头承诺的
-    "上传阶段 SSL UNEXPECTED_EOF 自动重试"**从未真正生效**（实测撞上
-    `UNEXPECTED_EOF_WHILE_READING` 时直接 FAILED、没有一句重试日志）。
-    现改为**按返回值**判定：-1（传输层失败）与 5xx 可重试；4xx 是载荷/参数问题，
-    重试没有意义，直接返回交给调用方。
-    """
-    last = None
-    for i in range(1, attempts + 1):
-        try:
-            # 按档位选 key：low → 1K 的 key；medium/high → KEY_HD（见 gen.key_for）
-            st, txt = G.call(fields, files, timeout=timeout, key=G.key_for(quality))
-        except Exception as e:  # noqa: BLE001  （gen.call 不抛，但别赌它以后不抛）
-            st, txt = -1, f"{type(e).__name__}: {e}"
-        if st != -1 and st < 500:
-            return st, txt
-        last = f"HTTP {st}: {str(txt)[:200]}"
-        print(f"   发送第 {i}/{attempts} 次失败（传输层）：{last}", flush=True)
-        if i < attempts:
-            time.sleep(min(3 * i, 15))
-    return -1, f"重试 {attempts} 次仍失败：{last}"
+    """Compatibility name/arguments only: attempts never enables a second POST."""
+    return G.call(fields, files, timeout=timeout, key=G.key_for(quality))
 
 
-def download(url: str, out: Path, attempts: int = 8, timeout: int = 600) -> None:
-    """下载结果图 —— **探测式抢高速档**（本次带宽诊断后的新策略）。
-
-    诊断结论（都是实测）：
-      · 本机链路不慢：到 Cloudflare 5,177 KB/s（41 Mbps）；
-      · 中转站图片 CDN 送图**极不稳定**：同一主机两次请求 1.26 KB/s ↔ 97.2 KB/s，**差 77 倍**；
-      · 该 CDN **不支持 Range**（带 Range 返回 200 而非 206），不能续传、不能分块并行；
-      · 图生图不支持内联 base64（`mask_edit_app.py:61/96` 已实测记录），所以绕不开这条 CDN。
-
-    推论：既然速率抖 77 倍，**用一个长超时去傻等是最差策略**——应该"低速就立刻断、重试抢档"。
-    curl 自带合用的参数：`--speed-limit <B/s> --speed-time <秒>`（速率持续低于阈值超时就主动中断）。
-
-    ⚠️ 门槛不能定高（首版踩到）：第一版用 (40K,5)(40K,5)(25K,6)(25K,6)…
-    **把一次平均 61.6 KB/s 的尝试也杀了**——它中途瞬时掉到 40 KB/s 以下就被 curl 断开。
-    实测这台 CDN 的工作区间就是 **20–60 KB/s**，偶尔崩到 1.5 KB/s，所以门槛要按这个区间定：
-      · 低于 ~12 KB/s 持续 10 秒 = 没救，断掉重试（这种尝试 900 秒也拿不到 10 MB）；
-      · 12–60 KB/s 是正常区间，**必须让它跑完**（10 MB / 20 KB/s ≈ 500 秒，所以要给足 max-time）。
-    另外**不支持 Range 意味着没有续传**，每次中断都从头再来，所以门槛越严、浪费的字节越多。
-
-    实测（10 MB / 3840×2160 那个 4K）：
-      旧策略：两次 900 秒各只取回约 1.9 MB，均失败 → 30 分钟白费；
-      新策略：4 次快速淘汰（110 秒）＋ 第 5 次 12 KB/s 门槛下 511 秒完成 → **约 11 分钟下完**。
-    """
-    plan = [(20000, 8), (20000, 8), (12000, 10), (12000, 10), (8000, 12), (0, 0), (0, 0), (0, 0)]
+def download(url: str, out: Path, attempts: int = 3, timeout: int = 300) -> None:
+    """GET only, at most three attempts inside one 300-second total budget."""
+    if not T.usable_url(url):
+        raise T.ResultError("no_image")
+    out = Path(out)
+    if out.exists():
+        raise T.ResultError("output_exists")
     curl = shutil.which("curl.exe") or shutil.which("curl")
     if not curl:
-        raise SystemExit(f"   找不到 curl；URL 已打印，可手工取回：{url}")
+        raise T.ResultError("download_unavailable")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + min(max(timeout, 0), 300)
+    last = "download_failed"
+    host = urllib.parse.urlsplit(url).hostname or ""
+    # imgen.x.ai rejects direct clients with TLS EOF or HTTP 403/1010.
+    # Measured fix: local proxy + browser UA + resume. Other hosts stay direct.
+    grok_cdn = host == "imgen.x.ai"
+    proxy = os.environ.get("IMAGE_DOWNLOAD_PROXY", "http://127.0.0.1:7890") if grok_cdn else ""
+    for i in range(min(max(attempts, 0), 3)):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        fd, tmp = tempfile.mkstemp(prefix=".download-", suffix=".tmp", dir=out.parent)
+        os.close(fd)
+        try:
+            # -q disables user curlrc, which could otherwise inject nested retry.
+            args = [curl, "-q", "-sS", "--fail", "-L", "--max-redirs", "5",
+                    "--proto", "=http,https", "--proto-redir", "=http,https",
+                    "--max-time", str(remaining), "--connect-timeout", str(min(30, remaining))]
+            if grok_cdn:
+                args += ["--proxy", proxy, "-A", "Mozilla/5.0", "-C", "-"]
+            else:
+                args += ["--noproxy", "*"]
+            args += ["-o", tmp, url]
+            r = subprocess.run(args, capture_output=True, timeout=remaining)
+            if r.returncode == 0:
+                T.publish_image(tmp, out)
+                return
+        except T.ResultError as exc:
+            last = str(exc)
+            if last == "output_exists":
+                raise
+        except (OSError, subprocess.TimeoutExpired):
+            last = "download_failed"
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+        print(f"  GET attempt {i + 1} failed; private recovery record retained", flush=True)
+    raise T.ResultError(last)
 
-    for i, (slimit, stime) in enumerate(plan[:attempts], 1):
-        args = [curl, "-sS", "-L", "--max-time", str(timeout)]
-        if slimit:
-            args += ["--speed-limit", str(slimit), "--speed-time", str(stime)]
-        else:
-            args += ["--max-time", "1800"]
-        args += ["--retry", "1", "--retry-delay", "2", "-A", "curl/8.0", "-o", str(out), url]
 
-        t0 = time.time()
-        r = subprocess.run(args, capture_output=True, text=True)
-        dt = max(time.time() - t0, 0.1)
-        got = out.stat().st_size if out.exists() else 0
-        kbps = got / 1024 / dt
-
-        ok = False
-        if r.returncode == 0 and got > 1024:
-            try:
-                Image.open(out).load()          # 完整解码校验：截断文件 open 不报错、load 才报
-                ok = True
-            except Exception as e:  # noqa: BLE001
-                print(f"   第{i}次：文件不完整（{got:,} B）: {e}", flush=True)
-
-        gate = "无门槛" if not slimit else f"{slimit//1000} KB/s×{stime}s"
-        if ok:
-            print(f"   第{i}次成功：{got:,} B / {dt:.0f} 秒 = {kbps:.1f} KB/s（门槛 {gate}）", flush=True)
-            return
-        print(f"   第{i}次未通过：{got:,} B / {dt:.0f} 秒 = {kbps:.1f} KB/s"
-              f"（门槛 {gate}，rc={r.returncode}）{' ' + r.stderr.strip()[:70] if r.stderr else ''}",
-              flush=True)
-        time.sleep(min(2 + i, 8))
-
-    raise SystemExit(f"   下载失败（{attempts} 次尝试）；URL 已记入 pending_urls.json，可用 "
-                     f"fetch_url.py 补下：{url}")
-
-
-PENDING = _HERE / "pending_urls.json"
+PENDING = Path(os.environ.get("ZIMAGE_PENDING_FILE", str(_HERE / "pending_urls.json")))
 
 
 def note_pending(out_p: Path, url: str, status: str) -> None:
@@ -225,7 +192,7 @@ def note_pending(out_p: Path, url: str, status: str) -> None:
     data = [d for d in data if d.get("out") != str(out_p)]
     data.append({"out": str(out_p), "url": url, "status": status,
                  "ts": time.strftime("%Y-%m-%d %H:%M:%S")})
-    PENDING.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    T.atomic_bytes(PENDING, json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"), private=True)
 
 
 # ---------- 局部遮罩（把「改图」插件最强的能力搬进命令行）----------
@@ -322,7 +289,7 @@ def scratch_path(out_p: Path, suffix: str) -> Path:
     return d / f"{out_p.stem}{suffix}"
 
 
-LEDGER = Path(__file__).resolve().parent / "call_ledger.jsonl"
+LEDGER = Path(os.environ.get("ZIMAGE_LEDGER_FILE", str(_HERE / "call_ledger.jsonl")))
 
 
 def log_call(rec: dict) -> None:
@@ -335,10 +302,11 @@ def log_call(rec: dict) -> None:
     """
     try:
         rec = {"ts": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), **rec}
+        LEDGER.parent.mkdir(parents=True, exist_ok=True)
         with LEDGER.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception as e:                      # 台账永远不该让作业失败
-        print(f"  （台账写入失败，已忽略：{e}）", flush=True)
+        print("  ledger write failed (safe diagnostic)", flush=True)
 
 
 def report_budget(tw: int, th: int, total: int, note: str) -> None:
@@ -370,14 +338,84 @@ def report_budget(tw: int, th: int, total: int, note: str) -> None:
     print("  （最坏档由探测式抢档兜底：低速会被快速淘汰后重试，不会真等这么久）")
 
 
+def receive_result(result, out_p, report, *, no_download=False):
+    try:
+        result.phase = "parse_response"
+        item = T.result_item(result.text)
+        if item.get("b64_json"):
+            result.phase = "decode_image"
+            T.write_report(report, result)
+            T.save_b64(item["b64_json"], out_p)
+        else:
+            result.phase = "download"
+            note_pending(out_p, item["url"], "pending")
+            if no_download:
+                result.phase = "result_pending"
+                result.classification = "url_pending"
+                T.write_report(report, result)
+                print("  URL retained in private local recovery record; no download", flush=True)
+                return 0
+            T.write_report(report, result)
+            download(item["url"], out_p)
+            note_pending(out_p, item["url"], "done")
+        result.phase = "saved"
+        result.classification = "saved"
+        T.write_report(report, result)
+        return 0
+    except T.ResultError as exc:
+        result.classification = str(exc)
+    except Exception:
+        result.classification = "local_result_error"
+    T.write_report(report, result)
+    print("FAILED: " + result.classification, flush=True)
+    return 1
+
+
+def check_result(out_p, check_target):
+    with Image.open(out_p) as im:
+        im.load()
+        print(f"  saved {out_p}  {im.size}", flush=True)
+    if check_target and CHECK.exists():
+        return subprocess.run([sys.executable, str(CHECK), "check",
+                               "--target", check_target, "--out", str(out_p)]).returncode
+    return 0
+
+
+def recover_result(snapshot, out_p, report, check_target=None):
+    result = T.CallResult(phase="recovery", acceptance="unknown")
+    try:
+        result.text = Path(snapshot).read_text(encoding="utf-8")
+        T.result_item(result.text)
+    except (OSError, ValueError, T.ResultError):
+        result.classification = "cannot_recover_unknown"
+        T.write_report(report, result)
+        print("FAILED: cannot_recover_unknown; no POST performed", flush=True)
+        return 1
+    rc = receive_result(result, out_p, report)
+    log_call({"out": str(out_p), **result.report(), "recovery": True})
+    return rc if rc else check_result(out_p, check_target)
+
+
 # ---------- 单轮 ----------
 
-def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
+def _run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
             tw: int, th: int, pad: str, quality: str, budget: int, check_target: str | None,
             mask_p: Path | None = None, model: str = "", dry_run: bool = False, ask: bool = False,
             mask_invert: bool = False, mask_primary: bool = False,
             encode: str = "png", jpg_quality: int = 90, no_download: bool = False,
-            b64_result: bool = True) -> int:
+            b64_result: bool = True, transport_report=None, snapshot=None,
+            marker=None, recover_from=None) -> int:
+    transport_report = transport_report or Path(str(out_p) + ".transport.json")
+    snapshot = snapshot or Path(str(out_p) + ".response.private.json")
+    marker = marker or Path(str(out_p) + ".submission")
+    initial = T.CallResult()
+    T.write_report(transport_report, initial)
+    if recover_from:
+        return recover_result(recover_from, out_p, transport_report, check_target)
+    if out_p.exists() and not dry_run:
+        initial.classification = "output_exists"
+        T.write_report(transport_report, initial)
+        return 1
     content = Image.open(content_p).convert("RGB")
     refs = [Image.open(p).convert("RGB") for p in refs_p]
     prompt = prompt_p.read_text(encoding="utf-8").strip()
@@ -512,57 +550,57 @@ def run_one(content_p: Path, refs_p: list[Path], prompt_p: Path, out_p: Path,
                 "coverage_pct": round(cov, 2) if mask_p else None,
                 # 记明"发送时是否自动前置了遮罩说明"，便于日后回溯提示词到底长什么样
                 "mask_prompt_prepended": bool(mask_p)}
-    t0 = time.time()
-    st, txt = post_with_retry(fields, files, quality=quality)
-    elapsed = time.time() - t0
-    print(f"  HTTP {st}   {elapsed:.1f}s", flush=True)
-    if st != 200:
-        print("FAILED:\n" + txt[:1200])
-        log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
-                  "result": "failed", "error": txt[:300]})
+    result = G.call_structured(fields, files,
+                               key=G.key_for(quality), marker=marker,
+                               report_path=transport_report)
+    if result.classification != "response_complete":
+        print("FAILED: " + result.classification, flush=True)
+        log_call({**base_rec, **result.report(), "result": "failed"})
         return 1
-
-    item = (json.loads(txt).get("data") or [{}])[0]
-    if item.get("b64_json"):
-        out_p.write_bytes(base64.b64decode(item["b64_json"]))
-        log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
-                  "result": "b64", "out_bytes": out_p.stat().st_size})
-    elif item.get("url"):
-        print(f"  result url: {item['url']}", flush=True)   # 先打印再下载
-        note_pending(out_p, item["url"], "pending")         # 生成即落盘，下载慢/失败也不丢 URL
-        if no_download:
-            # 生成与取回**解耦**：只落 URL、不下载，立刻腾出并发槽去跑下一张。
-            # 依据（2026-09-25 实测）：把两者耦合在同一个并发批次里时，一个下载卡住会占死
-            # 并发槽 —— 6 个 job、并发 3 时，前 3 个卡在下载重试，**后 3 个根本没开始生成**。
-            # 取回交给 round_lib/fetch_url.py --pending 单独跑。
-            print("  --no-download：只落 URL，不下载（用 fetch_url.py --pending 补）", flush=True)
-            log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
-                      "result": "url(no-download)"})
-            return 0
-        download(item["url"], out_p)
-        note_pending(out_p, item["url"], "done")
-        log_call({**base_rec, "http": st, "elapsed_s": round(elapsed, 1),
-                  "result": "url", "url": item["url"],
-                  "out_bytes": out_p.stat().st_size if out_p.exists() else None})
-    else:
-        print("no image in response: " + txt[:400])
+    try:
+        T.private_snapshot(snapshot, result.text, secrets=(G.KEY, G.KEY_HD))
+    except OSError:
+        result.phase = "snapshot"
+        result.classification = "snapshot_failed"
+        T.write_report(transport_report, result)
         return 1
+    rc = receive_result(result, out_p, transport_report, no_download=no_download)
+    log_call({**base_rec, **result.report(), "result": result.classification})
+    if rc or no_download:
+        return rc
+    return check_result(out_p, check_target)
 
-    size = Image.open(out_p).size
-    print(f"  saved {out_p}  {size}  {out_p.stat().st_size//1024} KB", flush=True)
 
-    if check_target and CHECK.exists():
-        print("  --- 生成后体检 ---", flush=True)
-        subprocess.run([sys.executable, str(CHECK), "check",
-                        "--target", check_target, "--out", str(out_p)])
-    return 0
+def run_one(*args, **kwargs):
+    import inspect
+    bound = inspect.signature(_run_one).bind(*args, **kwargs)
+    bound.apply_defaults()
+    out_p = bound.arguments["out_p"]
+    report = bound.arguments["transport_report"] or Path(str(out_p) + ".transport.json")
+    marker = bound.arguments["marker"] or Path(str(out_p) + ".submission")
+    try:
+        return _run_one(*args, **kwargs)
+    except (Exception, SystemExit):
+        result = T.CallResult(phase="preflight", classification="local_error")
+        try:
+            previous = json.loads(Path(report).read_text(encoding="utf-8"))
+            result = T.CallResult(**{k: v for k, v in previous.items() if k in result.report()})
+            result.classification = "local_error"
+        except (OSError, ValueError, TypeError):
+            if Path(marker).exists():
+                result.phase = "child_process"
+                result.acceptance = "unknown"
+        T.write_report(report, result)
+        log_call({"out": str(out_p), **result.report()})
+        print("FAILED: local_error (safe diagnostic)", flush=True)
+        return 1
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="一轮作业一键跑")
-    ap.add_argument("--content", required=True)
+    ap.add_argument("--content", default="")
     ap.add_argument("--ref", action="append", default=[], help="可多次；顺序即 image[1]、image[2]…")
-    ap.add_argument("--prompt", action="append", required=True)
+    ap.add_argument("--prompt", action="append", default=[])
     ap.add_argument("--out", action="append", required=True)
     ap.add_argument("--size", default="1024x1024")
     ap.add_argument("--quality", default="low")
@@ -600,10 +638,23 @@ def main() -> int:
     ap.add_argument("--ask", action="store_true",
                     help="先打印预算报表，再问 (y/N) 确认才发送。**仅适合交互式手跑**；"
                          "agent/后台请勿用（读不到输入会按取消处理）")
+    ap.add_argument("--transport-report", default="")
+    ap.add_argument("--report", dest="transport_report_alias", default="")
+    ap.add_argument("--snapshot", default="")
+    ap.add_argument("--recover-from", default="")
     a = ap.parse_args()
 
-    if len(a.prompt) != len(a.out):
-        raise SystemExit("--prompt 与 --out 数量必须一一对应")
+    report = a.transport_report or a.transport_report_alias or None
+    if a.recover_from:
+        if len(a.out) != 1:
+            raise SystemExit("Recovery requires a single output")
+        return recover_result(Path(a.recover_from), Path(a.out[0]),
+                              Path(report) if report else Path(a.out[0] + ".transport.json"),
+                              a.check_target or None)
+    if not a.content or len(a.prompt) != len(a.out):
+        raise SystemExit("--content and matching --prompt/--out are required")
+    if len(a.out) != 1 and (report or a.snapshot or a.recover_from):
+        raise SystemExit("Explicit report/snapshot/recovery requires a single output")
     tw, th = (int(v) for v in a.size.split("x"))
     budget = int(a.budget_mib * 1048576)
     mask_p = Path(a.mask) if a.mask else None
@@ -621,7 +672,10 @@ def main() -> int:
                           mask_p=mask_p, model=a.model, dry_run=a.dry_run, ask=a.ask,
                           mask_invert=a.mask_invert, mask_primary=a.mask_primary,
                           encode=a.encode, jpg_quality=a.jpg_quality,
-                          no_download=a.no_download, b64_result=not a.url_result)
+                          no_download=a.no_download, b64_result=not a.url_result,
+                          transport_report=Path(report) if report else None,
+                          snapshot=Path(a.snapshot) if a.snapshot else None,
+                          recover_from=Path(a.recover_from) if a.recover_from else None)
         return rc
 
     print(f"并行发送 {len(jobs)} 个方案（并发 {a.concurrency}）", flush=True)

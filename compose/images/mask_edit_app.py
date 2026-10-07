@@ -97,6 +97,8 @@ def env_cred(name: str, default: str = "") -> str:
 # 留空则页面必须手填、服务端会明确报错，不会静默传空串。
 _RELAY_BASE = env_cred("RELAY_BASE_URL", "https://image-direct.geiliapi.com/v1").rstrip("/")
 _RELAY_KEY = env_cred("RELAY_API_KEY", "")
+_GROK_BASE = env_cred("RELAY_GROK_BASE_URL", "").rstrip("/")
+_GROK_KEY = env_cred("RELAY_GROK_API_KEY", "")
 
 ENGINES = {
     "gpt": {
@@ -120,15 +122,15 @@ ENGINES = {
     "grok": {
         "label": "Grok Imagine · 文生图 + 图生图",
         "member": "grok",
-        "base": _RELAY_BASE,
-        "key": _RELAY_KEY,
-        "t2i_model": "grok-imagine",
-        "i2i_model": "grok-imagine-edit",
+        "base": _GROK_BASE,
+        "key": _GROK_KEY,
+        "t2i_model": env_cred("RELAY_GROK_T2I_MODEL", "grok-imagine"),
+        "i2i_model": env_cred("RELAY_GROK_I2I_MODEL", "grok-imagine-edit"),
         # spec: do NOT send OpenAI `quality` to Grok models
         "uses_quality": False,
         "uses_resolution": True,     # 1k / 2k (4k may be rejected upstream)
         "edits_b64": False,          # /images/edits ignores response_format
-        "multi_image": False,        # >1 reference image -> HTTP 400
+        "multi_image": False,        # measured 2026-10-06: image + image[1] -> HTTP 400
         "mask": False,
         "sizes": {
             "1k": ["1024x1024", "1024x1024", "1024x1024"],
@@ -144,28 +146,25 @@ def engine_of(name: str):
 
 
 def engine_fetch_image(item, timeout=180):
-    """Return (b64, error). Handles both inline b64_json and a url.
-
-    The url branch is what makes Grok image-to-image fail here: the url points
-    at imgen.x.ai which is unreachable, so the failure is reported with the
-    exact reason instead of a generic download error.
-    """
+    """Return (b64, error). Inline b64 stays local; URL results use the shared downloader."""
     import base64 as _b64
+    import tempfile
+    from pathlib import Path
     if item.get("b64_json"):
         return item["b64_json"], None
     url = item.get("url")
     if not url:
         return None, "响应里既没有 b64_json 也没有 url"
+    host = urllib.parse.urlsplit(url).hostname or ""
     try:
-        with urllib.request.urlopen(url, timeout=timeout,
-                                    context=ssl.create_default_context()) as r:
-            return _b64.b64encode(r.read()).decode(), None
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "style-distill" / "round_lib"))
+        from run_round import download
+        with tempfile.TemporaryDirectory(prefix="engine-image-") as directory:
+            path = Path(directory) / "result.img"
+            download(url, path, timeout=min(timeout, 300))
+            return _b64.b64encode(path.read_bytes()).decode(), None
     except Exception as e:
-        host = url.split("/")[2] if "//" in url else url
-        return None, (f"图片下载失败（{type(e).__name__}）\n"
-                      f"图片地址在 {host}，本机无法访问该域名。\n"
-                      f"Grok 的 /images/edits 不支持内联 base64，"
-                      f"所以图生图在本机不可用。\n原始地址：{url[:160]}")
+        return None, f"图片下载失败（{type(e).__name__}），结果域名 {host}"
 
 
 def force_size_b64(b64: str, size: str):
@@ -2688,7 +2687,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({
                     "ok": False,
                     "message": (f"当前引擎「{eng['label']}」不接受多张输入图片"
-                                f"（上游返回 HTTP 400）。\n"
+                                f"（2026-10-06 实测：image + image[1] 返回 HTTP 400）。\n"
                                 f"你已添加 {len(refs)} 张参考图：{names}\n\n"
                                 f"请二选一：\n"
                                 f"  · 改用「GPT Image 2」引擎（支持多张参考图）；或\n"
