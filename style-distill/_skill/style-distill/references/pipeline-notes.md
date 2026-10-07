@@ -19,7 +19,7 @@
 | 端点 | `RELAY_BASE_URL`（**image-direct.geiliapi.com/v1**，2026-10-06 用户确认定稿） | `RELAY_GROK_BASE_URL`（同站分离配置） |
 | 模型 | `gpt-image-2.5-sunburst`（默认）／`gpt-image-2.5-flare` | `grok-imagine`（t2i）／`grok-imagine-edit`（i2i） |
 | 输入图 | 多张（image + image[1..]，实测 3 张可） | **单张**——image + image[1] 实测 HTTP 400 |
-| 特殊参数 | `input_fidelity: "low"` 实测透传（2026-10-06 geiliapi 验证）——画风迁移必带 | size 白名单仅 1024x1024 |
+| 特殊参数 | `input_fidelity: "low"` 实测透传（2026-10-06 geiliapi 验证）——画风迁移必带。**2026-10-07 已入 CLI**：`run_round.py --input-fidelity low`，ledger 同步记录 `host` 与该参数 | size 白名单仅 1024x1024 |
 | 尺寸 | low 档 1024x1536／1024x1024／1536x1024 | **仅 1024x1024**（1k 档白名单；1024x1536 实测 400） |
 | image 字段 | 文件名/类型随意 | **必须 `image.png` + `image/png`**（`base.jpg`+`image/jpeg` 实测 400，即使内容是 JPEG 配 PNG 头也能过） |
 | 响应 | b64 或 URL | 只回 URL（imgen.x.ai：需代理＋浏览器 UA＋断点续传） |

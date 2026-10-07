@@ -53,6 +53,8 @@ files = {
 
 ## 五、`input_fidelity=low`：画风迁移的正解参数
 
+> 2026-10-07 更新：该参数已并入正式 CLI——`run_round.py --input-fidelity low`，ledger 同步记录 `host` 与参数值；一次性脚本全部归档至 `.zimage/archive/`。
+
 gpt-image 系的原生参数（GPT 通道特有，Grok 无此概念）：
 
 - `low`：明确告诉模型「不要照抄输入图的内容」，输入图退化为风格/氛围指导；

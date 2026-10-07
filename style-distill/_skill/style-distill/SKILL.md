@@ -302,7 +302,7 @@ description: 图像风格提取／蒸馏与图生图作业规范——风格迁�
 
 | 文件 | 用途 |
 |---|---|
-| `round_lib/run_round.py` | 一键跑一轮：自动压体积 → 发送（断连重试）→ 生成即落盘 URL → 探测式抢档下载 → 解码校验 → 自动体检；**每次调用追加一条台账**（`round_lib/call_ledger.jsonl`：尺寸/pad/quality/模型/提示词+sha1/发送字节/蒙版覆盖率/HTTP/耗时/结果），被拒发也记；**比例不符会警告**（`--pad crop` 居中裁掉多少、替代尺寸是什么）；`--concurrency` 支持多方案并行；**`--dry-run` 只出预算报表不发送**；`--mask` 任意形状蒙版（**正向改图必须配 `--mask-primary` 才生效，实测配方见 pipeline-notes 第十节**；反向 `--mask-invert` 保护可用；超 1.96 MiB 直接拒发）；`--mask-primary` 实验开关；`--model` 换通道 |
+| `round_lib/run_round.py` | 一键跑一轮：自动压体积 → 发送（断连重试）→ 生成即落盘 URL → 探测式抢档下载 → 解码校验 → 自动体检；**每次调用追加一条台账**（`round_lib/call_ledger.jsonl`：尺寸/pad/quality/模型/提示词+sha1/发送字节/蒙版覆盖率/HTTP/**host**/耗时/结果），被拒发也记；**比例不符会警告**（`--pad crop` 居中裁掉多少、替代尺寸是什么）；`--concurrency` 支持多方案并行；**`--dry-run` 只出预算报表不发送**；`--input-fidelity low` 画风迁移必带（2026-10-07 已入工具，ledger 同步记录）；`--mask` 任意形状蒙版（**正向改图必须配 `--mask-primary` 才生效，实测配方见 pipeline-notes 第十节**；反向 `--mask-invert` 保护可用；超 1.96 MiB 直接拒发）；`--mask-primary` 实验开关；`--model` 换通道 |
 | `round_lib/local_ops.py` | **确定性操作合集（不调接口）**：`lighten-lines` 线稿减淡（保护大块深色，输出与已认可的版本逐像素一致）、`upscale` 放大（只在线条区锐化）、`crop-to` 裁成目标比例、`contact-sheet` 拼版对照、`tone-report` 调子剖面。**开工四问第 0 问的落地工具** |
 | `round_lib/fetch_url.py` | 按 URL 补下结果，或 `--pending` 批量补齐未完成的 |
 | `round_lib/tone_report.py` | 调子剖面（纸白／墨量／灰调／亮部／平均亮度／对比跨度／彩度），可对基准比对并排序 |
@@ -313,6 +313,8 @@ description: 图像风格提取／蒸馏与图生图作业规范——风格迁�
 | `references/pipeline-notes.md` | 接口约束、脚本口径陷阱、目录分置铁律、已实测结论 |
 | `scripts/audit_and_check.py` | `audit` 输入体检（尺寸／哈希／重复／角色分配）；`check` 生成后体检（色相漂移／留白占比／尺寸） |
 | `scripts/style_metrics.py` | **风格量化对比（2026-10-06 接入）**：WD14 打标（tag 重合率／差异清单）＋colorgram 调色板；体检出数用，替代肉眼「像不像」判断 |
+| `scripts/series_audit.py` | **系列批量验收（2026-10-07 接入）**：对系列目录每张跑 WD14＋调色板＋亮区色＋edge，产出 per-image json＋汇总表——消除批量抽样盲区 |
+| `scripts/sync_skill.py` | **双目录一键同步（2026-10-07 接入）**：仓库镜像 → `~/.agents/skills/`，逐字节校验＋SKILL 行数报告 |
 | `controlnet_aux`（pip） | **Lineart 线稿提取（2026-10-06 接入）**：`LineartDetector.from_pretrained("lllyasviel/Annotators")`，CPU 可跑——LINE 段分析与线稿对照的客观底稿。⚠ OpenPose/DWPose 对动漫立绘实测失效（真人训练模型，只检出残缺手臂；DWPose 另有 mmpose 依赖 bug），**姿态客观化仍靠人眼＋几何锚点** |
 | `.zimage/work/edge_density.py`、`ai_flavor.py` | **笔触密度与高频噪声脚本（2026-10-06）**：edge 出「弱/强边缘占比」（驳杂基线，图一≈14.2%）；ai_flavor 实测无判别力已废弃留存 |
 
