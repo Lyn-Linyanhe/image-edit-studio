@@ -110,6 +110,36 @@ hand covering the caption, sleeve covering the caption, hair covering the subtit
   （具名禁止会被"换一个件名"绕过——背带被拦后它改成了短裙与长袜。）
 - 更稳的做法：需要精细姿态时**一格一版分开生成**，避免两格同时改姿态相互牵制。
 
+## 九、误读「通透」与拼接泄漏（2026-10-06）
+
+```
+sheer clothing, transparent fabric, skin visible through clothing,
+glass skin, glowing rim light, plastic skin,
+split-screen reference, text labels, watermark,
+silver-blue hair, purple eyes, updo, extra character
+```
+
+「通透」只表示干净、透亮、简洁。衣服必须是能看清领口、袖口、腰和裙摆的实体布料。上下拼接不是双图输入，不得用它代替独立字段。
+
+## 十、阴影灰调（2026-10-06 实测）
+
+```
+cold grey shading, grey midtones, desaturated shadows, muddy grey wash
+```
+
+**历史依据**：撑伞风格迁移 r9——STYLE 段写了「阴影是同色相的浅一档」，但没禁灰调，
+结果阴影整体偏冷灰，画法变得厚重发闷。**正向「同色相加深一档」＋负向禁冷灰必须成对出现**，
+只写正向压不住模型默认的灰调。
+
+## 十一、细线乱线圈（2026-10-06 实测）
+
+```
+tangled hair coils, curly scribble loops, spring-like coiled strands,
+knotted line tangles, scribbly tangled thin lines
+```
+
+**历史依据**：input_fidelity=low 路线在发丝/细线密集区的固有失败形态——发丝画成卷曲打结的乱线圈（放大裁片确认为螺旋碎线团，非「驳杂」的碎笔多，而是线的形状错误）。**正向「单向长曲线、平行成组」与负向本条要成对出现**；修复用 Lineart 定位＋避脸蒙版局部重绘（实测一次成功）。
+
 ## 追加纪律
 
 1. 每轮生成后，对照第 6 段体检清单，把**实际出现**的失败形态逐条加进来。
