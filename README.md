@@ -95,6 +95,9 @@ python zcode-image-edit/bin/zimage.py edit --image 原图.png --rect 300,200,700
 | [docs/迁移说明A_会话与技能.md](docs/迁移说明A_会话与技能.md) | 会话总结、`style-distill` 技能规范（铁律/四问/体积实测） |
 | [docs/迁移说明B_实现原理_改图与画廊.md](docs/迁移说明B_实现原理_改图与画廊.md) | 改图服务、遮蔽原理、画廊分类、模型接入 |
 | [docs/环境_Windows与WSL2混用.md](docs/环境_Windows与WSL2混用.md) | Windows/WSL2 双环境实测结论 |
+| [docs/开源工具与项目应用.md](docs/开源工具与项目应用.md) | GitHub 开源工具接入与验证：WD14 打标、colorgram 调色板、Lineart 线稿（含证伪记录） |
+| [docs/Grok通道建立.md](docs/Grok通道建立.md) | Grok 通道建立：双引擎架构、实测约束、`input_fidelity=low` 画风迁移、三组对照实验 |
+| [docs/响应中断与安全恢复.md](docs/响应中断与安全恢复.md) | 单次 POST 语义、结构化传输报告、安全恢复入口、离网测试 |
 | [zcode-image-edit/README.md](zcode-image-edit/README.md) | CLI 用法、AI 主流程、安装 |
 
 ## 兼容性说明
