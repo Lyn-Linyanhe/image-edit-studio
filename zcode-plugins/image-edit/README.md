@@ -19,7 +19,7 @@ python server/mask_edit_app.py --port 8000
 
 ## ZCode 组件
 
-- 插件标识仍为 `image-edit`，版本 `0.1.3`。
+- 插件标识仍为 `image-edit`，版本见 `.zcode-plugin/plugin.json`（当前 `0.1.4`）。页面会向 GitHub Release 查询是否有更新。
 - 画布技能名为 `image-edit-canvas`，命令为 `/image-edit-canvas`，避免遮蔽原 CLI 技能和命令。
 - MCP 工具：`image_edit_status`、`image_edit_ensure`、`image_edit_open`、`image_edit_stop`。
 - manifest 仅引用 `.mcp.json`，不重复维护服务定义。

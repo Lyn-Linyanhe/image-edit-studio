@@ -130,10 +130,32 @@
       // 安全：服务端只给 has_key 布尔值，绝不下发 api_key 本体。
       // 页面 key 留空时，服务端提交会自动回退到本机配置的 key（/api/edit 已实现）。
       if (!$("model").value && j.model) $("model").value = j.model;
+      if (j.version && $("appVersion")) $("appVersion").textContent = "v" + j.version;
       if (j.has_key) {
         setStatus($("connStatus"), "服务端已配置 API Key（页面留空即可）。点「测试」验证连通。");
       } else if (j.base_url) {
         setStatus($("connStatus"), "已从本机配置填入 Base URL。请在页面填写 API Key 后点「测试」。");
+      }
+      checkForUpdate();
+    } catch {}
+  }
+
+  async function checkForUpdate() {
+    const el = $("updateStatus");
+    if (!el) return;
+    try {
+      const r = await fetch("/api/update");
+      const j = await r.json();
+      if (!j.ok) return;
+      if (j.newer) {
+        el.innerHTML = `有新版本 v${j.latest}（当前 v${j.current}）。<a href="${j.url}" target="_blank" rel="noopener">查看 Release</a>`;
+        el.className = "status ok";
+      } else if (j.latest) {
+        el.textContent = `已是最新 v${j.current}`;
+        el.className = "status";
+      } else if (j.error) {
+        el.textContent = j.error;
+        el.className = "status";
       }
     } catch {}
   }
